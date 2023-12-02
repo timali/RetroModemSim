@@ -47,8 +47,13 @@ namespace RetroModemSim
 
             try
             {
+                // Create the client, which automatically connects.
                 tcpClient = new TcpClient(splitArr[0], port);
                 nwkStream = tcpClient.GetStream();
+
+                // Create and start a thread to receive data from the remote host.
+                Thread rxThread = new Thread(RxThread);
+                rxThread.Start();
 
                 return CmdRsp.Connect;
             }
@@ -56,6 +61,39 @@ namespace RetroModemSim
             {
                 iDiagMsg.WriteLine(ex.Message);
                 return CmdRsp.NoCarrier;
+            }
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
+        /// Receives data from the remote host.
+        /// </summary>
+        /*************************************************************************************************************/
+        void RxThread()
+        {
+            int rxByte;
+            while ((nwkStream != null) && tcpClient.Connected)
+            {
+                try
+                {
+                    rxByte = nwkStream.ReadByte();
+
+                    if (rxByte == -1)
+                    {
+                        throw new Exception("Remote host closed the connection.");
+                    }
+
+                    OnRxData(rxByte);
+                }
+                catch(Exception ex)
+                {
+                    // Do not indicate an error for this because it happens normally when we close the connection.
+                    if (ex.HResult != -2146232800)
+                    {
+                        iDiagMsg.WriteLine(ex.Message);
+                    }
+                    OnDisconnected();
+                }
             }
         }
 

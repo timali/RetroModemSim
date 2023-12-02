@@ -32,16 +32,36 @@ namespace RetroModemSim
 
         /*************************************************************************************************************/
         /// <summary>
+        /// Called from derived classes when they receive data from the remote host.
+        /// </summary>
+        /*************************************************************************************************************/
+        protected void OnRxData(int rxData)
+        {
+            lock (stateLock)
+            {
+                // If we are in online data mode, deliver the byte to the DTE. Otherwise, discard the data.
+                if (state == StateEnum.Online)
+                {
+                    iDTE.TxByte(rxData);
+                }
+            }
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
         /// Called from derived classes when they detect their connection has been disconnected.
         /// </summary>
         /*************************************************************************************************************/
         protected void OnDisconnected()
         {
-            lock (escapeLock)
+            lock (stateLock)
             {
-                Hangup();
-                ExitOnlineDataMode();
-                SendResponse(CmdRsp.NoCarrier);
+                if (connected)
+                {
+                    Hangup();
+                    ExitOnlineDataMode();
+                    SendResponse(CmdRsp.NoCarrier);
+                }
             }
         }
 
@@ -143,7 +163,7 @@ namespace RetroModemSim
         StateEnum state;
         IDTE iDTE;
         Stopwatch escapeSw = new Stopwatch();
-        object escapeLock = new object();
+        object stateLock = new object();
         Timer EscapeSequenceTimer;
         int[] sReg = new int[(int)SRegEnum.LastValue] {
             2,          // Rings before answering
@@ -758,7 +778,10 @@ namespace RetroModemSim
                     }
                     else if (inChar == sReg[(int)SRegEnum.BS])
                     {
-                        cmdStrBuilder.Remove(cmdStrBuilder.Length - 1, 1);
+                        if (cmdStrBuilder.Length > 0)
+                        {
+                            cmdStrBuilder.Remove(cmdStrBuilder.Length - 1, 1);
+                        }
                     }
                     else
                     {
@@ -803,7 +826,7 @@ namespace RetroModemSim
         /*************************************************************************************************************/
         void OnEscapeSequenceTimeout(object unused)
         {
-            lock (escapeLock)
+            lock (stateLock)
             {
                 if (escapeCharCount == 3)
                 {
@@ -824,7 +847,7 @@ namespace RetroModemSim
         /*************************************************************************************************************/
         void TerminateEscapeSequence()
         {
-            lock (escapeLock)
+            lock (stateLock)
             {
                 // Stop the guardband timer.
                 EscapeSequenceTimer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
@@ -853,7 +876,7 @@ namespace RetroModemSim
         /*************************************************************************************************************/
         void ProcessByteInOnlineDataMode(int dataFromDte)
         {
-            lock (escapeLock)
+            lock (stateLock)
             {
                 if (dataFromDte == sReg[(int)SRegEnum.EscapeCode])
                 {
