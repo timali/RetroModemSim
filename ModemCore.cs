@@ -28,7 +28,7 @@ namespace RetroModemSim
         /// <summary>
         /// Terminates the remote connection.
         /// </summary>
-        protected abstract void HangUp();
+        protected abstract void HangUpModem();
 
         /*************************************************************************************************************/
         /// <summary>
@@ -526,7 +526,8 @@ namespace RetroModemSim
             if (connected)
             {
                 iDiagMsg.WriteLine("Hanging Up");
-                HangUp();
+                iDTE.SetDCD(false);
+                HangUpModem();
                 connected = false;
             }
         }

@@ -125,7 +125,7 @@ namespace RetroModemSim
         /// Terminates the remote connection.
         /// </summary>
         /*************************************************************************************************************/
-        protected override void HangUp()
+        protected override void HangUpModem()
         {
             iDiagMsg.WriteLine($"Hangup");
 
