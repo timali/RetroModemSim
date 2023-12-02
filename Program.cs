@@ -4,7 +4,16 @@
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("Hello, World!");
+            Console.WriteLine("Retro Modem Simulator v1.0, Alicie, 2023.");
+
+            IDTE io = new ConsoleDTE();
+            IDiagMsg msg = new ConsoleDiagMsg();
+
+            while (true)
+            {
+                ModemSim modemSim = new ModemSim(io, msg);
+                modemSim.RunSimulation();
+            }
         }
     }
 }
