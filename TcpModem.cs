@@ -1,7 +1,12 @@
-﻿namespace RetroModemSim
+﻿using System.Net.Sockets;
+
+namespace RetroModemSim
 {
     public class TcpModem: ModemCore
     {
+        TcpClient tcpClient;
+        NetworkStream nwkStream;
+
         /*************************************************************************************************************/
         /// <summary>
         /// Constructor.
@@ -22,7 +27,36 @@
         /*************************************************************************************************************/
         protected override CmdResponse Dial(string destination)
         {
-            return CmdRsp.Connect;
+            string[] splitArr = destination.Split(':');
+            if (splitArr.Length != 2 )
+            {
+                iDiagMsg.WriteLine("Invalid destination");
+                return CmdRsp.Error;
+            }
+
+            int port;
+            try
+            {
+                port = int.Parse(splitArr[1]);
+            }
+            catch
+            {
+                iDiagMsg.WriteLine("Invalid port");
+                return CmdRsp.Error;
+            }
+
+            try
+            {
+                tcpClient = new TcpClient(splitArr[0], port);
+                nwkStream = tcpClient.GetStream();
+
+                return CmdRsp.Connect;
+            }
+            catch (Exception ex)
+            {
+                iDiagMsg.WriteLine(ex.Message);
+                return CmdRsp.NoCarrier;
+            }
         }
 
         /*************************************************************************************************************/
@@ -34,7 +68,18 @@
         /*************************************************************************************************************/
         protected override void TxByteToRemoteHost(int b)
         {
-            iDiagMsg.WriteLine($"TX({(char)b})");
+            if ((nwkStream != null) && tcpClient.Connected)
+            {
+                try
+                {
+                    nwkStream.WriteByte((byte)b);
+                }
+                catch(Exception ex)
+                {
+                    iDiagMsg.WriteLine(ex.Message);
+                    OnDisconnected();
+                }
+            }
         }
 
         /*************************************************************************************************************/
@@ -45,6 +90,18 @@
         protected override void HangUp()
         {
             iDiagMsg.WriteLine($"Hangup");
+
+            try
+            {
+                nwkStream?.Dispose();
+                tcpClient?.Dispose();
+                nwkStream = null;
+                tcpClient = null;
+            }
+            catch(Exception ex)
+            {
+                iDiagMsg.WriteLine(ex.Message);
+            }
         }
     }
 }

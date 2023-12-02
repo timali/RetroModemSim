@@ -32,6 +32,21 @@ namespace RetroModemSim
 
         /*************************************************************************************************************/
         /// <summary>
+        /// Called from derived classes when they detect their connection has been disconnected.
+        /// </summary>
+        /*************************************************************************************************************/
+        protected void OnDisconnected()
+        {
+            lock (escapeLock)
+            {
+                Hangup();
+                ExitOnlineDataMode();
+                SendResponse(CmdRsp.NoCarrier);
+            }
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
         /// Encapsulates a response to an AT command.
         /// </summary>
         /*************************************************************************************************************/
@@ -126,6 +141,7 @@ namespace RetroModemSim
         StringBuilder cmdStrBuilder;
         int escapeCharCount, resultCodeLimit = RESULT_CODE_ALL;
         StateEnum state;
+        IDTE iDTE;
         Stopwatch escapeSw = new Stopwatch();
         object escapeLock = new object();
         Timer EscapeSequenceTimer;
@@ -146,7 +162,6 @@ namespace RetroModemSim
         };
 
         // Protected members available to derived classes.
-        protected IDTE iDTE;
         protected IDiagMsg iDiagMsg;
         protected List<CommandHandler> cmdList = new List<CommandHandler>();
         protected delegate CmdResponse CmdHandlerDelegate(string cmdStr, Match match);
@@ -181,6 +196,10 @@ namespace RetroModemSim
             cmdList.Add(new CommandHandler("^D.*$",                                 CmdDial));
             cmdList.Add(new CommandHandler("^S(?<reg>\\d+)\\?$",                    CmdSRegQuery));
             cmdList.Add(new CommandHandler("^S(?<reg>\\d+)=(?<val>\\d+)$",          CmdSRegSet));
+
+            // Install the generic AT command handler last because it will match any command. Do this here instead of
+            // in the constructor to allow the user to install custom commands.
+            cmdList.Add(new CommandHandler("", CmdAt));
         }
 
         /*************************************************************************************************************/
@@ -513,7 +532,7 @@ namespace RetroModemSim
         CmdResponse CmdDial(string cmdStr, Match match)
         {
             bool enterOnlineMode = true;
-            int subStrLen = cmdStr.Length - 1;
+            int subStrLen = cmdStr.Length - 1, startIdx = 1;
 
             // If the last character is a ';', then dial, but remain in command mode.
             if (cmdStr.EndsWith(";"))
@@ -523,8 +542,15 @@ namespace RetroModemSim
                 enterOnlineMode = false;
             }
 
+            // Remove the touch-tone or pulse dialing indicator if present.
+            if ((cmdStr.Length >= 2) && ((cmdStr[1] == 'T') || (cmdStr[1] == 'P')))
+            {
+                startIdx++;
+                subStrLen--;
+            }
+
             // Remove the beginning D, and the ';' if necessary.
-            cmdStr = cmdStr.Substring(1, subStrLen);
+            cmdStr = cmdStr.Substring(startIdx, subStrLen);
 
             // Use our modem instance to dial the remote destination.
             CmdResponse cmdRsp = Dial(cmdStr);
@@ -757,6 +783,21 @@ namespace RetroModemSim
 
         /*************************************************************************************************************/
         /// <summary>
+        /// Exits online data mode and returns to command mode.
+        /// </summary>
+        /*************************************************************************************************************/
+        void ExitOnlineDataMode()
+        {
+            if (state == StateEnum.Online)
+            {
+                iDiagMsg.WriteLine("Command Mode");
+                escapeCharCount = 0;
+                state = StateEnum.AwaitingA;
+            }
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
         /// Called in an arbitrary thread when the guardband timer fires.
         /// </summary>
         /*************************************************************************************************************/
@@ -766,9 +807,7 @@ namespace RetroModemSim
             {
                 if (escapeCharCount == 3)
                 {
-                    iDiagMsg.WriteLine("Command Mode");
-                    escapeCharCount = 0;
-                    state = StateEnum.AwaitingA;
+                    ExitOnlineDataMode();
                 }
                 else
                 {
@@ -876,10 +915,6 @@ namespace RetroModemSim
         /*************************************************************************************************************/
         public void RunSimulation()
         {
-            // Install the generic AT command handler last because it will match any command. Do this here instead of
-            // in the constructor to allow the user to install custom commands.
-            cmdList.Add(new CommandHandler("", CmdAt));
-
             // Initialize the state of the GPIOs.
             iDTE.SetDCD(false);
             iDTE.SetRING(false);
