@@ -9,8 +9,27 @@ namespace RetroModemSim
     /// Generic modem simulator.
     /// </summary>
     /*************************************************************************************************************/
-    public class ModemCore
+    public abstract class ModemCore
     {
+        // Abstract classes to be implemented in derived classes.
+        /// <summary>
+        /// Sends a byte to the remote host.
+        /// </summary>
+        /// <param name="b">The byte to send.</param>
+        protected abstract void TxByteToRemoteHost(int b);
+
+        /// <summary>
+        /// Creates a connection to the remote destination.
+        /// </summary>
+        /// <param name="destination">A string describing the remote destination.</param>
+        /// <returns>The connect command upon success, or any other response upon error.</returns>
+        protected abstract CmdResponse Dial(string destination);
+
+        /// <summary>
+        /// Terminates the remote connection.
+        /// </summary>
+        protected abstract void HangUp();
+
         /*************************************************************************************************************/
         /// <summary>
         /// Encapsulates a response to an AT command.
@@ -34,7 +53,7 @@ namespace RetroModemSim
         /// Helper class encapsulating the functionality required to process a single command.
         /// </summary>
         /*************************************************************************************************************/
-        public class CommandHandler
+        protected class CommandHandler
         {
             public Regex CmdStrRegEx { get; private set; }
 
@@ -68,12 +87,10 @@ namespace RetroModemSim
             }
         }
 
-        public delegate CmdResponse CmdHandlerDelegate(string cmdStr, Match match);
-
         /// <summary>
         /// The various states the modem can be in.
         /// </summary>
-        public enum StateEnum
+        enum StateEnum
         {
             AwaitingA,
             AwaitingT,
@@ -84,7 +101,7 @@ namespace RetroModemSim
         /// <summary>
         /// All the S registers we support.
         /// </summary>
-        public enum SRegEnum
+        enum SRegEnum
         {
             RingsBeforeAnswering            = 0,
             RingCount                       = 1,
@@ -108,9 +125,6 @@ namespace RetroModemSim
         bool echo, petscii, zap, connected, halfDuplex, hideResponses, numericResponses;
         StringBuilder cmdStrBuilder;
         int escapeCharCount, resultCodeLimit = RESULT_CODE_ALL;
-        IDTE iDTE;
-        IDiagMsg iDiagMsg;
-        IModem iModem;
         StateEnum state;
         Stopwatch escapeSw = new Stopwatch();
         object escapeLock = new object();
@@ -131,20 +145,22 @@ namespace RetroModemSim
             50,         // EscapeGuardTime
         };
 
-        List<CommandHandler> cmdList = new List<CommandHandler>();
+        // Protected members available to derived classes.
+        protected IDTE iDTE;
+        protected IDiagMsg iDiagMsg;
+        protected List<CommandHandler> cmdList = new List<CommandHandler>();
+        protected delegate CmdResponse CmdHandlerDelegate(string cmdStr, Match match);
 
         /*************************************************************************************************************/
         /// <summary>
         /// Constructor.
         /// </summary>
         /// <param name="iDTE">The DTE instance to use.</param>
-        /// <param name="iModem">The modem instance to use.</param>
         /// <param name="iDiagMsg">The diagnostics message instance to use.</param>
         /*************************************************************************************************************/
-        public ModemCore(IDTE iDTE, IModem iModem, IDiagMsg iDiagMsg)
+        public ModemCore(IDTE iDTE, IDiagMsg iDiagMsg)
         {
             this.iDTE = iDTE;
-            this.iModem = iModem;
             this.iDiagMsg = iDiagMsg;
 
             EscapeSequenceTimer = new Timer(OnEscapeSequenceTimeout);
@@ -471,7 +487,7 @@ namespace RetroModemSim
             if (connected)
             {
                 iDiagMsg.WriteLine("Hanging Up");
-                iModem.HangUp();
+                HangUp();
                 connected = false;
             }
         }
@@ -511,7 +527,7 @@ namespace RetroModemSim
             cmdStr = cmdStr.Substring(1, subStrLen);
 
             // Use our modem instance to dial the remote destination.
-            CmdResponse cmdRsp = iModem.Dial(cmdStr);
+            CmdResponse cmdRsp = Dial(cmdStr);
 
             // See if the modem was able to connect to the destination.
             if (cmdRsp == CmdRsp.Connect)
@@ -777,7 +793,7 @@ namespace RetroModemSim
                 // Send any escape codes that we have buffered.
                 while (escapeCharCount > 0)
                 {
-                    iModem.TxByteToRemoteHost(sReg[(int)SRegEnum.EscapeCode]);
+                    TxByteToRemoteHost(sReg[(int)SRegEnum.EscapeCode]);
 
                     // Echo the data back to the DTE in half-duplex mode.
                     if (halfDuplex)
@@ -836,7 +852,7 @@ namespace RetroModemSim
                 else
                 {
                     TerminateEscapeSequence();
-                    iModem.TxByteToRemoteHost(dataFromDte);
+                    TxByteToRemoteHost(dataFromDte);
 
                     // Echo the data back to the DTE in half-duplex mode.
                     if (halfDuplex)

@@ -8,12 +8,11 @@
 
             IDTE io         = new ConsoleDTE();
             IDiagMsg msg    = new ConsoleDiagMsg();
-            IModem modem    = new TcpModem();
 
             while (true)
             {
-                ModemCore modemCore = new ModemCore(io, modem, msg);
-                modemCore.RunSimulation();
+                TcpModem modem = new TcpModem(io, msg);
+                modem.RunSimulation();
             }
         }
     }
