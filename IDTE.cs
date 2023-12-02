@@ -6,8 +6,8 @@
 
         int RxByte();
 
-        void SetRts(bool asserted);
+        void SetDCD(bool asserted);
 
-        void SetDtr(bool asserted);
+        void SetRING(bool asserted);
     }
 }

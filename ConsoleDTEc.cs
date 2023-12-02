@@ -12,14 +12,14 @@
             return Console.ReadKey(true).KeyChar;
         }
 
-        public void SetRts(bool asserted)
+        public void SetDCD(bool asserted)
         {
-            Console.WriteLine($"<RTS {asserted}>");
+            Console.WriteLine($"<DCD {asserted}>");
         }
 
-        public void SetDtr(bool asserted)
+        public void SetRING(bool asserted)
         {
-            Console.WriteLine($"<DTR {asserted}>");
+            Console.WriteLine($"<RING {asserted}>");
         }
     }
 }
