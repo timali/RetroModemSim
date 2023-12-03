@@ -31,8 +31,9 @@ namespace RetroModemSim
 
         public void SetDCD(bool asserted)
         {
-            // Most NULL-modem cables wire DTR to the DCD pin on the other side.
-            port.DtrEnable = asserted;
+            // Most NULL-modem cables wire DTR to the DCD pin on the other side. The C64/128 terminal programs I
+            // use (AA term) seem to have inverted DCD logic, so invert the signal before setting it.
+            port.DtrEnable = !asserted;
         }
 
         public void SetRING(bool asserted)
