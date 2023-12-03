@@ -39,10 +39,18 @@ namespace RetroModemSim
         {
             lock (stateLock)
             {
-                // If we are in online data mode, deliver the byte to the DTE. Otherwise, discard the data.
                 if (state == StateEnum.Online)
                 {
+                    // If we are in online data mode, deliver the byte to the DTE.
                     iDTE.TxByte(rxData);
+                }
+                else
+                {
+                    // Otherwise, buffer it if buffering is enabled, or else discard the data.
+                    if (bufferOnline)
+                    {
+                        onlineDataBuffer.Enqueue((byte) rxData);
+                    }
                 }
             }
         }
@@ -104,9 +112,11 @@ namespace RetroModemSim
 
         const int PETSCII_START = 0xC1, PETSCII_END = 0xDA, PETSCII_SHIFT = 0x80;
         const int RESULT_CODE_ALL = int.MaxValue;
-        bool echo=true, petscii, zap, connected, halfDuplex, hideResponses, numericResponses, intrmRspSent;
+        bool petscii, zap, connected, halfDuplex, hideResponses, numericResponses, intrmRspSent;
+        bool bufferOnline = true, echo = true;
         StringBuilder cmdStrBuilder;
         int escapeCharCount, resultCodeLimit = RESULT_CODE_ALL;
+        Queue<byte> onlineDataBuffer = new Queue<byte>();
         PhoneBook phoneBook = new PhoneBook();
         StateEnum state;
         IDTE iDTE;
@@ -182,6 +192,7 @@ namespace RetroModemSim
             cmdList.Add(new CommandHandler("^\\+IPR=(?<baud>\\d+)$",                CmdSetBaud));
 
             // Install our custom AT command handlers
+            cmdList.Add(new CommandHandler("^\\$B[01]?$",                           CmdBufferOnline));
             cmdList.Add(new CommandHandler("^\\$PB=(?<key>.+),(?<value>.+)$",       CmdPhoneBookAdd));
             cmdList.Add(new CommandHandler("^\\$PB\\?$",                            CmdPhoneBookQuery));
             cmdList.Add(new CommandHandler("^\\$PB=(?<key>.+)$",                    CmdPhoneBookDelete));
@@ -207,6 +218,7 @@ namespace RetroModemSim
                 iDTE.SetDCD(false);
                 HangUpModem();
                 connected = false;
+                onlineDataBuffer.Clear();
             }
         }
 
@@ -384,9 +396,20 @@ namespace RetroModemSim
                 petscii = false;
                 intrmRspSent = false;
 
-                // If we're not in online mode now, then we're awaiting another AT command.
-                if (state != StateEnum.Online)
+                if (state == StateEnum.Online)
                 {
+                    // Send any buffered data to the DTE.
+                    if (bufferOnline)
+                    {
+                        while (onlineDataBuffer.Count > 0)
+                        {
+                            iDTE.TxByte(onlineDataBuffer.Dequeue());
+                        }
+                    }
+                }
+                else
+                {
+                    // If we're not in online mode now, then we're awaiting another AT command.
                     state = StateEnum.AwaitingA;
                 }
             }

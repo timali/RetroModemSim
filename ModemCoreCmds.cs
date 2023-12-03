@@ -515,5 +515,26 @@ namespace RetroModemSim
 
             return CmdRsp.Ok;
         }
+
+        /*************************************************************************************************************/
+        /// <summary>
+        /// AT$B, Enable/disable buffering of data in online data mode.
+        /// </summary>
+        /*************************************************************************************************************/
+        CmdResponse CmdBufferOnline(string cmdStr, Match match)
+        {
+            if ((cmdStr.Length > 2) && (cmdStr[2] == '0'))
+            {
+                iDiagMsg.WriteLine("Online Data Mode Buffering Disabled");
+                bufferOnline = false;
+                onlineDataBuffer.Clear();
+            }
+            else
+            {
+                iDiagMsg.WriteLine("Online Data Mode Buffering Enabled");
+                bufferOnline = true;
+            }
+            return CmdRsp.Ok;
+        }
     }
 }
