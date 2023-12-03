@@ -156,7 +156,7 @@ namespace RetroModemSim
 
             EscapeSequenceTimer = new Timer(OnEscapeSequenceTimeout);
 
-            // Install our command handlers.
+            // Install our Hayes-compatible AT command handlers.
             cmdList.Add(new CommandHandler("^T$",                                   CmdToneDialing));
             cmdList.Add(new CommandHandler("^P$",                                   CmdPulseDialing));
             cmdList.Add(new CommandHandler("^Z$",                                   CmdZap));
@@ -172,6 +172,9 @@ namespace RetroModemSim
             cmdList.Add(new CommandHandler("^D.*$",                                 CmdDial));
             cmdList.Add(new CommandHandler("^S(?<reg>\\d+)\\?$",                    CmdSRegQuery));
             cmdList.Add(new CommandHandler("^S(?<reg>\\d+)=(?<val>\\d+)$",          CmdSRegSet));
+
+            // Install our extended AT command handlers.
+            cmdList.Add(new CommandHandler("^\\+IPR=(?<baud>\\d+)$",                CmdSetBaud));
 
             // Install the generic AT command handler last because it will match any command. Do this here instead of
             // in the constructor to allow the user to install custom commands.

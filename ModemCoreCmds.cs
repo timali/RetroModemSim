@@ -414,5 +414,31 @@ namespace RetroModemSim
 
             return cmdRsp;
         }
+
+        /*************************************************************************************************************/
+        /// <summary>
+        /// AT+IPR={baud}, change the baud rate.
+        /// </summary>
+        /// <remarks>
+        /// The baud rate is immediately set, and so the command response will be sent at the new baud rate.
+        /// </remarks>
+        /*************************************************************************************************************/
+        CmdResponse CmdSetBaud(string cmdStr, Match match)
+        {
+            int baud = int.Parse(match.Groups["baud"].Value);
+
+            try
+            {
+                iDiagMsg.WriteLine($"Setting baud rate to {baud}.");
+                iDTE.SetBaud(baud);
+            }
+            catch(Exception ex)
+            {
+                iDiagMsg.WriteLine($"Failed to set baud rate to {baud}: {ex.Message}");
+                return CmdRsp.Error;
+            }
+
+            return CmdRsp.Ok;
+        }
     }
 }
