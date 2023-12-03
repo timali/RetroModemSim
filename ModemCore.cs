@@ -100,7 +100,7 @@ namespace RetroModemSim
 
         const int PETSCII_START = 0xC1, PETSCII_END = 0xDA, PETSCII_SHIFT = 0x80;
         const int RESULT_CODE_ALL = int.MaxValue;
-        bool echo, petscii, zap, connected, halfDuplex, hideResponses, numericResponses;
+        bool echo=true, petscii, zap, connected, halfDuplex, hideResponses, numericResponses;
         StringBuilder cmdStrBuilder;
         int escapeCharCount, resultCodeLimit = RESULT_CODE_ALL;
         StateEnum state;
@@ -223,6 +223,7 @@ namespace RetroModemSim
             cmdStr = cmdStr.Substring(startIdx, subStrLen);
 
             // Use our modem instance to dial the remote destination.
+            iDiagMsg.WriteLine($"Dialing \"{cmdStr}\"...");
             CmdResponse cmdRsp = Dial(cmdStr);
 
             // See if the modem was able to connect to the destination.
@@ -239,6 +240,10 @@ namespace RetroModemSim
                 {
                     EnterOnlineDataMode();
                 }
+            }
+            else
+            {
+                iDiagMsg.WriteLine($"Unable to connect to \"{cmdStr}\": {cmdRsp.ResponseStr}");
             }
 
             return cmdRsp;
@@ -390,6 +395,9 @@ namespace RetroModemSim
             {
                 iDTE.TxByte(TranslateToPetscii(inChar));
             }
+
+            // Capitalize everything so we can also work with lowercase AT commands.
+            inChar = char.ToUpper((char)inChar);
 
             // Run the AT command state machine.
             switch (state)
