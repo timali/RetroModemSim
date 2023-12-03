@@ -24,6 +24,10 @@ namespace RetroModemSim
         /// </summary>
         /// <param name="destination">A string describing the remote destination.</param>
         /// <returns>The connect command upon success, or any other response upon error.</returns>
+        /// <remarks>
+        /// If the destination starts with an '@', the '@' is ignored. This is useful when connecting to hosts that
+        /// begin with a T or a P, as the T will be interpreted as the touch-tone or pulse indicator.
+        /// </remarks>
         /*************************************************************************************************************/
         protected override CmdResponse Dial(string destination)
         {
@@ -47,8 +51,15 @@ namespace RetroModemSim
 
             try
             {
+                // Remove the '@' from the beginning of the string if present.
+                string destStr = splitArr[0];
+                if (destStr.StartsWith('@'))
+                {
+                    destStr = destStr.Substring(1);
+                }
+
                 // Create the client, which automatically connects.
-                tcpClient = new TcpClient(splitArr[0], port);
+                tcpClient = new TcpClient(destStr, port);
                 nwkStream = tcpClient.GetStream();
 
                 // Create and start a thread to receive data from the remote host.
@@ -80,7 +91,7 @@ namespace RetroModemSim
 
                     if (rxByte == -1)
                     {
-                        throw new Exception("Remote host closed the connection.");
+                        throw new Exception("Remote host closed the connection");
                     }
 
                     OnRxData(rxByte);
@@ -127,7 +138,7 @@ namespace RetroModemSim
         /*************************************************************************************************************/
         protected override void HangUpModem()
         {
-            iDiagMsg.WriteLine($"Hangup");
+            iDiagMsg.WriteLine($"Disconnecting from remote host");
 
             try
             {

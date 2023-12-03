@@ -1,5 +1,13 @@
 ﻿namespace RetroModemSim
 {
+    /*************************************************************************************************************/
+    /// <summary>
+    /// Simple implementation of a DTE using the console.
+    /// </summary>
+    /// <remarks>
+    /// This is primarily for debugging and testing so that you do not need to use a real UART.
+    /// </remarks>
+    /*************************************************************************************************************/
     public class ConsoleDTE: IDTE
     {
         public void TxByte(int b)

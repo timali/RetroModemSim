@@ -4,8 +4,7 @@
     {
         public void WriteLine(string msg)
         {
-            Console.WriteLine();
-            Console.WriteLine($"<{ msg}>");
+            Console.WriteLine(msg);
         }
     }
 }
