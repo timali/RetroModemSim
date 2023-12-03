@@ -294,7 +294,7 @@ namespace RetroModemSim
                 return CmdRsp.Error;
             }
 
-            TxLineNoLock(sReg[reg].ToString());
+            SendIntermediateResponseNoLock(sReg[reg].ToString());
             return CmdRsp.Ok;
         }
 
@@ -356,7 +356,7 @@ namespace RetroModemSim
             }
             else
             {
-                return CmdRsp.Ok;
+                return CmdRsp.NoCarrier;
             }
         }
 
@@ -387,6 +387,13 @@ namespace RetroModemSim
 
             // Remove the beginning D, and the ';' if necessary.
             cmdStr = cmdStr.Substring(startIdx, subStrLen);
+
+            // See if the entry is in our phonebook.
+            string phoneBookValue = phoneBook.GetEntry(cmdStr);
+            if (phoneBookValue != null)
+            {
+                cmdStr = phoneBookValue;
+            }
 
             // Use our modem instance to dial the remote destination.
             iDiagMsg.WriteLine($"Dialing \"{cmdStr}\"...");
@@ -435,6 +442,74 @@ namespace RetroModemSim
             catch(Exception ex)
             {
                 iDiagMsg.WriteLine($"Failed to set baud rate to {baud}: {ex.Message}");
+                return CmdRsp.Error;
+            }
+
+            return CmdRsp.Ok;
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
+        /// AT$PB={key}, delete the entry in the phone book with the specified key.
+        /// </summary>
+        /*************************************************************************************************************/
+        CmdResponse CmdPhoneBookDelete(string cmdStr, Match match)
+        {
+            string key = match.Groups["key"].Value;
+
+            try
+            {
+                phoneBook.DeleteEntry(key);
+            }
+            catch(Exception ex)
+            {
+                iDiagMsg.WriteLine($"Failed to delete entry {key} from the phone book: {ex.Message}");
+                return CmdRsp.Error;
+            }
+
+            return CmdRsp.Ok;
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
+        /// AT$PB={key},{value} add the entry to the phone book with the specified key.
+        /// </summary>
+        /*************************************************************************************************************/
+        CmdResponse CmdPhoneBookAdd(string cmdStr, Match match)
+        {
+            string key = match.Groups["key"].Value;
+            string value = match.Groups["value"].Value;
+
+            try
+            {
+                phoneBook.AddEntry(key, value);
+            }
+            catch(Exception ex)
+            {
+                iDiagMsg.WriteLine($"Failed to add entry {key} to the phone book: {ex.Message}");
+                return CmdRsp.Error;
+            }
+
+            return CmdRsp.Ok;
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
+        /// AT$PB? Query the contents of the phone book.
+        /// </summary>
+        /*************************************************************************************************************/
+        CmdResponse CmdPhoneBookQuery(string cmdStr, Match match)
+        {
+            try
+            {
+                foreach(KeyValuePair<string, string> kvp in phoneBook.GetContents())
+                {
+                    SendIntermediateResponseNoLock($"$PB: \"{kvp.Key}\",\"{kvp.Value}\"");
+                }
+            }
+            catch(Exception ex)
+            {
+                iDiagMsg.WriteLine($"Failed to query phone book contents: {ex.Message}");
                 return CmdRsp.Error;
             }
 

@@ -60,14 +60,16 @@ namespace RetroModemSim
                 {
                     HangupNoLock();
                     ExitOnlineDataModeNoLock();
-                    SendResponseNoLock(CmdRsp.NoCarrier);
+                    SendFinalResponseNoLock(CmdRsp.NoCarrier);
                 }
             }
         }
 
+        /*************************************************************************************************************/
         /// <summary>
         /// The various states the modem can be in.
         /// </summary>
+        /*************************************************************************************************************/
         enum StateEnum
         {
             AwaitingA,
@@ -76,9 +78,11 @@ namespace RetroModemSim
             Online,
         }
 
+        /*************************************************************************************************************/
         /// <summary>
         /// All the S registers we support.
         /// </summary>
+        /*************************************************************************************************************/
         enum SRegEnum
         {
             RingsBeforeAnswering            = 0,
@@ -100,9 +104,10 @@ namespace RetroModemSim
 
         const int PETSCII_START = 0xC1, PETSCII_END = 0xDA, PETSCII_SHIFT = 0x80;
         const int RESULT_CODE_ALL = int.MaxValue;
-        bool echo=true, petscii, zap, connected, halfDuplex, hideResponses, numericResponses;
+        bool echo=true, petscii, zap, connected, halfDuplex, hideResponses, numericResponses, intrmRspSent;
         StringBuilder cmdStrBuilder;
         int escapeCharCount, resultCodeLimit = RESULT_CODE_ALL;
+        PhoneBook phoneBook = new PhoneBook();
         StateEnum state;
         IDTE iDTE;
         Stopwatch escapeSw = new Stopwatch();
@@ -175,6 +180,11 @@ namespace RetroModemSim
 
             // Install our extended AT command handlers.
             cmdList.Add(new CommandHandler("^\\+IPR=(?<baud>\\d+)$",                CmdSetBaud));
+
+            // Install our custom AT command handlers
+            cmdList.Add(new CommandHandler("^\\$PB=(?<key>.+),(?<value>.+)$",       CmdPhoneBookAdd));
+            cmdList.Add(new CommandHandler("^\\$PB\\?$",                            CmdPhoneBookQuery));
+            cmdList.Add(new CommandHandler("^\\$PB=(?<key>.+)$",                    CmdPhoneBookDelete));
 
             // Install the generic AT command handler last because it will match any command. Do this here instead of
             // in the constructor to allow the user to install custom commands.
@@ -281,20 +291,33 @@ namespace RetroModemSim
 
         /*************************************************************************************************************/
         /// <summary>
-        /// Transmits a string to the DTE preceding and following with CR+LF.
+        /// Sends a CR+LF to the DTE (actually sends whatever characters are defines in the S-registers.
+        /// </summary>
+        /// <remarks>
+        /// The state lock must already be held before calling this method.
+        /// </remarks>
+        /*************************************************************************************************************/
+        void SendCrLfNoLock()
+        {
+            iDTE.TxByte(sReg[(int)SRegEnum.CR]);
+            iDTE.TxByte(sReg[(int)SRegEnum.LF]);
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
+        /// Transmits a string to the DTE preceded with CR+LF.
         /// </summary>
         /// <param name="str">The string to transmit.</param>
         /// <remarks>
         /// The state lock must already be held before calling this method.
         /// </remarks>
         /*************************************************************************************************************/
-        void TxLineNoLock(string str)
+        void SendIntermediateResponseNoLock(string str)
         {
-            iDTE.TxByte(sReg[(int)SRegEnum.CR]);
-            iDTE.TxByte(sReg[(int)SRegEnum.LF]);
+            SendCrLfNoLock();
             TxStrNoLock(str);
-            iDTE.TxByte(sReg[(int)SRegEnum.CR]);
-            iDTE.TxByte(sReg[(int)SRegEnum.LF]);
+
+            intrmRspSent = true;
         }
 
         /*************************************************************************************************************/
@@ -306,18 +329,27 @@ namespace RetroModemSim
         /// The state lock must already be held before calling this method.
         /// </remarks>
         /*************************************************************************************************************/
-        void SendResponseNoLock(CmdResponse rsp)
+        void SendFinalResponseNoLock(CmdResponse rsp)
         {
             if ((rsp != CmdRsp.None) && (!hideResponses) && (rsp.Code <= resultCodeLimit))
             {
+                // If any intermediate responses were sent, send an extra CR+LF.
+                if (intrmRspSent)
+                {
+                    SendCrLfNoLock();
+                }
+
                 if (numericResponses)
                 {
-                    TxLineNoLock(rsp.Code.ToString());
+                    SendIntermediateResponseNoLock(rsp.Code.ToString());
                 }
                 else
                 {
-                    TxLineNoLock(rsp.ResponseStr);
+                    SendIntermediateResponseNoLock(rsp.ResponseStr);
                 }
+
+                // The final response has an extra CR+LF after it.
+                SendCrLfNoLock();
             }
         }
 
@@ -337,7 +369,7 @@ namespace RetroModemSim
                 {
                     if ((rsp = cmd.ExecuteCommand(cmdStrBuilder.ToString())) != null)
                     {
-                        SendResponseNoLock(rsp);
+                        SendFinalResponseNoLock(rsp);
                         break;
                     }
                 }
@@ -345,11 +377,12 @@ namespace RetroModemSim
                 // No command handler for the given command, so alert the user.
                 if (rsp == null)
                 {
-                    SendResponseNoLock(CmdRsp.Error);
+                    SendFinalResponseNoLock(CmdRsp.Error);
                 }
 
                 // The command is now complete.
                 petscii = false;
+                intrmRspSent = false;
 
                 // If we're not in online mode now, then we're awaiting another AT command.
                 if (state != StateEnum.Online)
@@ -446,6 +479,7 @@ namespace RetroModemSim
                 iDiagMsg.WriteLine("Command Mode");
                 escapeCharCount = 0;
                 state = StateEnum.AwaitingA;
+                SendFinalResponseNoLock(CmdRsp.Ok);
             }
         }
 
