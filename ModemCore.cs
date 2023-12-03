@@ -58,9 +58,9 @@ namespace RetroModemSim
             {
                 if (connected)
                 {
-                    Hangup();
-                    ExitOnlineDataMode();
-                    SendResponse(CmdRsp.NoCarrier);
+                    HangupNoLock();
+                    ExitOnlineDataModeNoLock();
+                    SendResponseNoLock(CmdRsp.NoCarrier);
                 }
             }
         }
@@ -131,6 +131,19 @@ namespace RetroModemSim
 
         /*************************************************************************************************************/
         /// <summary>
+        /// Returns the current guardband time as a TimeSpan.
+        /// </summary>
+        /*************************************************************************************************************/
+        TimeSpan GuardBand
+        {
+            get
+            {
+                return new TimeSpan(0, 0, 0, 0, 20 * sReg[(int)SRegEnum.EscapeGuardTime]);
+            }
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
         /// Constructor.
         /// </summary>
         /// <param name="iDTE">The DTE instance to use.</param>
@@ -169,8 +182,11 @@ namespace RetroModemSim
         /// <summary>
         /// Attempts to hang up the phone and terminate the connection.
         /// </summary>
+        /// <remarks>
+        /// The state lock must already be held before calling this method.
+        /// </remarks>
         /*************************************************************************************************************/
-        void Hangup()
+        void HangupNoLock()
         {
             if (connected)
             {
@@ -188,65 +204,13 @@ namespace RetroModemSim
         /*************************************************************************************************************/
         void EnterOnlineDataMode()
         {
-            iDiagMsg.WriteLine($"Online Data Mode");
-
-            state = StateEnum.Online;
-            escapeSw.Restart();
-        }
-
-        /*************************************************************************************************************/
-        /// <summary>
-        /// Dials a remote host.
-        /// </summary>
-        /*************************************************************************************************************/
-        CmdResponse CmdDial(string cmdStr, Match match)
-        {
-            bool enterOnlineMode = true;
-            int subStrLen = cmdStr.Length - 1, startIdx = 1;
-
-            // If the last character is a ';', then dial, but remain in command mode.
-            if (cmdStr.EndsWith(";"))
+            lock (stateLock)
             {
-                // Remove the semicolon before giving the string to the modem for dialing.
-                subStrLen--;
-                enterOnlineMode = false;
+                iDiagMsg.WriteLine($"Online Data Mode");
+
+                state = StateEnum.Online;
+                escapeSw.Restart();
             }
-
-            // Remove the touch-tone or pulse dialing indicator if present.
-            if ((cmdStr.Length >= 2) && ((cmdStr[1] == 'T') || (cmdStr[1] == 'P')))
-            {
-                startIdx++;
-                subStrLen--;
-            }
-
-            // Remove the beginning D, and the ';' if necessary.
-            cmdStr = cmdStr.Substring(startIdx, subStrLen);
-
-            // Use our modem instance to dial the remote destination.
-            iDiagMsg.WriteLine($"Dialing \"{cmdStr}\"...");
-            CmdResponse cmdRsp = Dial(cmdStr);
-
-            // See if the modem was able to connect to the destination.
-            if (cmdRsp == CmdRsp.Connect)
-            {
-                connected = true;
-                iDiagMsg.WriteLine($"Connected to \"{cmdStr}\"");
-
-                // Inform the DTE that we're now connected (the data carrier is detected).
-                iDTE.SetDCD(true);
-
-                // Move into online mode if requested.
-                if (enterOnlineMode)
-                {
-                    EnterOnlineDataMode();
-                }
-            }
-            else
-            {
-                iDiagMsg.WriteLine($"Unable to connect to \"{cmdStr}\": {cmdRsp.ResponseStr}");
-            }
-
-            return cmdRsp;
         }
 
         /*************************************************************************************************************/
@@ -300,8 +264,11 @@ namespace RetroModemSim
         /// Transmits a string to the DTE, translating to PETSCII if necessary.
         /// </summary>
         /// <param name="str">The string to transmit.</param>
+        /// <remarks>
+        /// The state lock must already be held before calling this method.
+        /// </remarks>
         /*************************************************************************************************************/
-        void TxStr(string str)
+        void TxStrNoLock(string str)
         {
             foreach(char c in str)
             {
@@ -314,12 +281,15 @@ namespace RetroModemSim
         /// Transmits a string to the DTE preceding and following with CR+LF.
         /// </summary>
         /// <param name="str">The string to transmit.</param>
+        /// <remarks>
+        /// The state lock must already be held before calling this method.
+        /// </remarks>
         /*************************************************************************************************************/
-        void TxLine(string str)
+        void TxLineNoLock(string str)
         {
             iDTE.TxByte(sReg[(int)SRegEnum.CR]);
             iDTE.TxByte(sReg[(int)SRegEnum.LF]);
-            TxStr(str);
+            TxStrNoLock(str);
             iDTE.TxByte(sReg[(int)SRegEnum.CR]);
             iDTE.TxByte(sReg[(int)SRegEnum.LF]);
         }
@@ -329,18 +299,21 @@ namespace RetroModemSim
         /// Sends a command response to the DTE.
         /// </summary>
         /// <param name="rsp">The response to send.</param>
+        /// <remarks>
+        /// The state lock must already be held before calling this method.
+        /// </remarks>
         /*************************************************************************************************************/
-        void SendResponse(CmdResponse rsp)
+        void SendResponseNoLock(CmdResponse rsp)
         {
             if ((rsp != CmdRsp.None) && (!hideResponses) && (rsp.Code <= resultCodeLimit))
             {
                 if (numericResponses)
                 {
-                    TxLine(rsp.Code.ToString());
+                    TxLineNoLock(rsp.Code.ToString());
                 }
                 else
                 {
-                    TxLine(rsp.ResponseStr);
+                    TxLineNoLock(rsp.ResponseStr);
                 }
             }
         }
@@ -352,31 +325,34 @@ namespace RetroModemSim
         /*************************************************************************************************************/
         void ExecuteCmd()
         {
-            CmdResponse rsp = null;
-
-            // Search our list of commands for one matching the one received.
-            foreach(CommandHandler cmd in cmdList)
+            lock (stateLock)
             {
-                if ((rsp = cmd.ExecuteCommand(cmdStrBuilder.ToString())) != null)
+                CmdResponse rsp = null;
+
+                // Search our list of commands for one matching the one received.
+                foreach (CommandHandler cmd in cmdList)
                 {
-                    SendResponse(rsp);
-                    break;
+                    if ((rsp = cmd.ExecuteCommand(cmdStrBuilder.ToString())) != null)
+                    {
+                        SendResponseNoLock(rsp);
+                        break;
+                    }
                 }
-            }
 
-            // No command handler for the given command, so alert the user.
-            if (rsp == null)
-            {
-                SendResponse(CmdRsp.Error);
-            }
+                // No command handler for the given command, so alert the user.
+                if (rsp == null)
+                {
+                    SendResponseNoLock(CmdRsp.Error);
+                }
 
-            // The command is now complete.
-            petscii = false;
+                // The command is now complete.
+                petscii = false;
 
-            // If we're not in online mode now, then we're awaiting another AT command.
-            if (state != StateEnum.Online)
-            {
-                state = StateEnum.AwaitingA;
+                // If we're not in online mode now, then we're awaiting another AT command.
+                if (state != StateEnum.Online)
+                {
+                    state = StateEnum.AwaitingA;
+                }
             }
         }
 
@@ -388,77 +364,67 @@ namespace RetroModemSim
         /*************************************************************************************************************/
         void ProcessByteInCommandMode(int dataFromDte)
         {
-            // Read a character from the DTE, and translate it from PETSCII to ASCII if necessary.
-            int inChar = TranslateFromPetscii(dataFromDte);
-
-            if (echo)
+            lock (stateLock)
             {
-                iDTE.TxByte(TranslateToPetscii(inChar));
-            }
+                // Read a character from the DTE, and translate it from PETSCII to ASCII if necessary.
+                int inChar = TranslateFromPetscii(dataFromDte);
 
-            // Capitalize everything so we can also work with lowercase AT commands.
-            inChar = char.ToUpper((char)inChar);
+                if (echo)
+                {
+                    iDTE.TxByte(TranslateToPetscii(inChar));
+                }
 
-            // Run the AT command state machine.
-            switch (state)
-            {
-                case StateEnum.AwaitingA:
-                    if (inChar == 'A')
-                    {
-                        state = StateEnum.AwaitingT;
-                    }
-                    break;
+                // Capitalize everything so we can also work with lowercase AT commands.
+                inChar = char.ToUpper((char)inChar);
 
-                case StateEnum.AwaitingT:
-                    switch (inChar)
-                    {
-                        case 'T':
-                            state = StateEnum.AwaitingCommand;
-                            cmdStrBuilder = new StringBuilder();
-                            break;
-
-                        // A/ immediately executes the previous command, which is still in cmdStrBuilder.
-                        case '/':
-                            ExecuteCmd();
-                            break;
-
-                        default:
-                            state = StateEnum.AwaitingA;
-                            break;
-                    }
-
-                    break;
-
-                case StateEnum.AwaitingCommand:
-                    if (inChar == sReg[(int)SRegEnum.CR])
-                    {
-                        ExecuteCmd();
-                    }
-                    else if (inChar == sReg[(int)SRegEnum.BS])
-                    {
-                        if (cmdStrBuilder.Length > 0)
+                // Run the AT command state machine.
+                switch (state)
+                {
+                    case StateEnum.AwaitingA:
+                        if (inChar == 'A')
                         {
-                            cmdStrBuilder.Remove(cmdStrBuilder.Length - 1, 1);
+                            state = StateEnum.AwaitingT;
                         }
-                    }
-                    else
-                    {
-                        cmdStrBuilder.Append((char) inChar);
-                    }
-                    break;
-            }
-        }
+                        break;
 
-        /*************************************************************************************************************/
-        /// <summary>
-        /// Returns the current guardband time as a TimeSpan.
-        /// </summary>
-        /*************************************************************************************************************/
-        TimeSpan GuardBand
-        {
-            get
-            {
-                return new TimeSpan(0, 0, 0, 0, 20 * sReg[(int)SRegEnum.EscapeGuardTime]);
+                    case StateEnum.AwaitingT:
+                        switch (inChar)
+                        {
+                            case 'T':
+                                state = StateEnum.AwaitingCommand;
+                                cmdStrBuilder = new StringBuilder();
+                                break;
+
+                            // A/ immediately executes the previous command, which is still in cmdStrBuilder.
+                            case '/':
+                                ExecuteCmd();
+                                break;
+
+                            default:
+                                state = StateEnum.AwaitingA;
+                                break;
+                        }
+
+                        break;
+
+                    case StateEnum.AwaitingCommand:
+                        if (inChar == sReg[(int)SRegEnum.CR])
+                        {
+                            ExecuteCmd();
+                        }
+                        else if (inChar == sReg[(int)SRegEnum.BS])
+                        {
+                            if (cmdStrBuilder.Length > 0)
+                            {
+                                cmdStrBuilder.Remove(cmdStrBuilder.Length - 1, 1);
+                            }
+                        }
+                        else
+                        {
+                            cmdStrBuilder.Append((char)inChar);
+                        }
+                        break;
+                }
             }
         }
 
@@ -466,8 +432,11 @@ namespace RetroModemSim
         /// <summary>
         /// Exits online data mode and returns to command mode.
         /// </summary>
+        /// <remarks>
+        /// The state lock must already be held before calling this method.
+        /// </remarks>
         /*************************************************************************************************************/
-        void ExitOnlineDataMode()
+        void ExitOnlineDataModeNoLock()
         {
             if (state == StateEnum.Online)
             {
@@ -488,12 +457,12 @@ namespace RetroModemSim
             {
                 if (escapeCharCount == 3)
                 {
-                    ExitOnlineDataMode();
+                    ExitOnlineDataModeNoLock();
                 }
                 else
                 {
                     // We did not receive all the escape characters in time, so the escape sequence has ended.
-                    TerminateEscapeSequence();
+                    TerminateEscapeSequenceNoLock();
                 }
             }
         }
@@ -502,27 +471,27 @@ namespace RetroModemSim
         /// <summary>
         /// Terminates the current escape sequence attempt, stopping the timer, and sending any escape characters.
         /// </summary>
+        /// <remarks>
+        /// The state lock must already be held before calling this method.
+        /// </remarks>
         /*************************************************************************************************************/
-        void TerminateEscapeSequence()
+        void TerminateEscapeSequenceNoLock()
         {
-            lock (stateLock)
+            // Stop the guardband timer.
+            EscapeSequenceTimer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+
+            // Send any escape codes that we have buffered.
+            while (escapeCharCount > 0)
             {
-                // Stop the guardband timer.
-                EscapeSequenceTimer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+                TxByteToRemoteHost(sReg[(int)SRegEnum.EscapeCode]);
 
-                // Send any escape codes that we have buffered.
-                while (escapeCharCount > 0)
+                // Echo the data back to the DTE in half-duplex mode.
+                if (halfDuplex)
                 {
-                    TxByteToRemoteHost(sReg[(int)SRegEnum.EscapeCode]);
-
-                    // Echo the data back to the DTE in half-duplex mode.
-                    if (halfDuplex)
-                    {
-                        iDTE.TxByte(sReg[(int)SRegEnum.EscapeCode]);
-                    }
-
-                    escapeCharCount--;
+                    iDTE.TxByte(sReg[(int)SRegEnum.EscapeCode]);
                 }
+
+                escapeCharCount--;
             }
         }
 
@@ -551,7 +520,7 @@ namespace RetroModemSim
                             else
                             {
                                 // We received the escape character, but it was too close in time to another character.
-                                TerminateEscapeSequence();
+                                TerminateEscapeSequenceNoLock();
                             }
                             break;
 
@@ -565,13 +534,13 @@ namespace RetroModemSim
 
                         default:
                             // We received too many escape sequence characters.
-                            TerminateEscapeSequence();
+                            TerminateEscapeSequenceNoLock();
                             break;
                     }
                 }
                 else
                 {
-                    TerminateEscapeSequence();
+                    TerminateEscapeSequenceNoLock();
                     TxByteToRemoteHost(dataFromDte);
 
                     // Echo the data back to the DTE in half-duplex mode.

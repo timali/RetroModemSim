@@ -225,7 +225,7 @@ namespace RetroModemSim
             else
             {
                 iDiagMsg.WriteLine("Hook On");
-                Hangup();
+                HangupNoLock();
             }
             return CmdRsp.Ok;
         }
@@ -294,7 +294,7 @@ namespace RetroModemSim
                 return CmdRsp.Error;
             }
 
-            TxLine(sReg[reg].ToString());
+            TxLineNoLock(sReg[reg].ToString());
             return CmdRsp.Ok;
         }
 
@@ -336,7 +336,7 @@ namespace RetroModemSim
         CmdResponse CmdZap(string cmdStr, Match match)
         {
             iDiagMsg.WriteLine("Reset All Settings to Default");
-            Hangup();
+            HangupNoLock();
             zap = true;
 
             return CmdRsp.Ok;
@@ -358,6 +358,61 @@ namespace RetroModemSim
             {
                 return CmdRsp.Ok;
             }
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
+        /// Dials a remote host.
+        /// </summary>
+        /*************************************************************************************************************/
+        CmdResponse CmdDial(string cmdStr, Match match)
+        {
+            bool enterOnlineMode = true;
+            int subStrLen = cmdStr.Length - 1, startIdx = 1;
+
+            // If the last character is a ';', then dial, but remain in command mode.
+            if (cmdStr.EndsWith(";"))
+            {
+                // Remove the semicolon before giving the string to the modem for dialing.
+                subStrLen--;
+                enterOnlineMode = false;
+            }
+
+            // Remove the touch-tone or pulse dialing indicator if present.
+            if ((cmdStr.Length >= 2) && ((cmdStr[1] == 'T') || (cmdStr[1] == 'P')))
+            {
+                startIdx++;
+                subStrLen--;
+            }
+
+            // Remove the beginning D, and the ';' if necessary.
+            cmdStr = cmdStr.Substring(startIdx, subStrLen);
+
+            // Use our modem instance to dial the remote destination.
+            iDiagMsg.WriteLine($"Dialing \"{cmdStr}\"...");
+            CmdResponse cmdRsp = Dial(cmdStr);
+
+            // See if the modem was able to connect to the destination.
+            if (cmdRsp == CmdRsp.Connect)
+            {
+                connected = true;
+                iDiagMsg.WriteLine($"Connected to \"{cmdStr}\"");
+
+                // Inform the DTE that we're now connected (the data carrier is detected).
+                iDTE.SetDCD(true);
+
+                // Move into online mode if requested.
+                if (enterOnlineMode)
+                {
+                    EnterOnlineDataMode();
+                }
+            }
+            else
+            {
+                iDiagMsg.WriteLine($"Unable to connect to \"{cmdStr}\": {cmdRsp.ResponseStr}");
+            }
+
+            return cmdRsp;
         }
     }
 }
