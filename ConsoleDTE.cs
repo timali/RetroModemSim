@@ -33,7 +33,6 @@
         /// <param name="asserted"></param>
         public void SetDCD(bool asserted)
         {
-            Console.WriteLine($"<DCD {asserted}>");
         }
 
         /// <summary>
@@ -42,7 +41,6 @@
         /// <param name="asserted"></param>
         public void SetRING(bool asserted)
         {
-            Console.WriteLine($"<RING {asserted}>");
         }
 
         /// <summary>
@@ -51,7 +49,6 @@
         /// <param name="baud"></param>
         public void SetBaud(int baud)
         {
-            Console.WriteLine($"<Setting baud rate to {baud}>");
         }
     }
 }
