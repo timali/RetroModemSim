@@ -38,6 +38,11 @@ namespace RetroModemSim
         /// </returns>
         protected abstract bool AnswerIncomingCall();
 
+        /// <summary>
+        /// Terminates an incoming call.
+        /// </summary>
+        protected abstract void TerminateIncomingCall();
+
         /*************************************************************************************************************/
         /// <summary>
         /// Called from derived classes when they receive data from the remote host.

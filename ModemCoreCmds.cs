@@ -390,6 +390,12 @@ namespace RetroModemSim
             bool enterOnlineMode = true;
             int subStrLen = cmdStr.Length - 1, startIdx = 1;
 
+            // If there is an incoming call, then terminate it.
+            if (ringing)
+            {
+                TerminateIncomingCall();
+            }
+
             // If we're already connected, hang up first.
             if (connected)
             {

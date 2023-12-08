@@ -51,6 +51,24 @@ namespace RetroModemSim
 
         /*************************************************************************************************************/
         /// <summary>
+        /// Sends the given client a busy message and then disposes of the TCP stream.
+        /// </summary>
+        /// <param name="client">The TCP client to terminate.</param>
+        /*************************************************************************************************************/
+        void TerminateIncomingClient(TcpClient client)
+        {
+            iDiagMsg.WriteLine("Terminating an incoming connection.");
+
+            using (StreamWriter sw = new StreamWriter(client.GetStream()))
+            {
+                sw.WriteLine("The remote host is busy with another call.");
+            }
+
+            client.Dispose();
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
         /// Accepts an incoming socket connection, starts a new RX thread for it, and notifies the modem core.
         /// </summary>
         /*************************************************************************************************************/
@@ -64,12 +82,7 @@ namespace RetroModemSim
                     // See if we're already in a call or if we already have an incoming call.
                     if (connected || (tcpClient != null) || (incomingClient != null))
                     {
-                        using (StreamWriter sw = new StreamWriter(newIncomingClient.GetStream()))
-                        {
-                            sw.WriteLine("The remote host is busy with another call.");
-                        }
-
-                        newIncomingClient.Dispose();
+                        TerminateIncomingClient(newIncomingClient);
                         return;
                     }
 
@@ -242,19 +255,30 @@ namespace RetroModemSim
         /*************************************************************************************************************/
         protected override bool AnswerIncomingCall()
         {
-            lock(stateLock)
+            if (incomingClient == null)
             {
-                if (incomingClient == null)
-                {
-                    return false;
-                }
+                return false;
+            }
 
-                // The incoming connection becomes our current connection, and there is no longer an incoming connection.
-                tcpClient = incomingClient;
-                acceptedIncomingCall = true;
-                incomingClient = null;
+            // The incoming connection becomes our current connection, and there is no longer an incoming connection.
+            tcpClient = incomingClient;
+            acceptedIncomingCall = true;
+            incomingClient = null;
 
-                return true;
+            return true;
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
+        /// Called by the modem core when there is an incoming call, and then the user dials an outgoing connection.
+        /// </summary>
+        /// <remarks>The state stock is already acquired when calling this method.</remarks>
+        /*************************************************************************************************************/
+        protected override void TerminateIncomingCall()
+        {
+            if (incomingClient != null)
+            {
+                TerminateIncomingClient(incomingClient);
             }
         }
 
