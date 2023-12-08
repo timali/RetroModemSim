@@ -6,6 +6,7 @@ namespace RetroModemSim
     /// <summary>
     /// Commands for the modem core.
     /// </summary>
+    /// <remarks>The state stock is already acquired when calling any command.</remarks>
     /*************************************************************************************************************/
     public abstract partial class ModemCore
     {
@@ -319,6 +320,25 @@ namespace RetroModemSim
 
         /*************************************************************************************************************/
         /// <summary>
+        /// ATA, answer incoming call.
+        /// </summary>
+        /*************************************************************************************************************/
+        CmdResponse CmdAnswer(string cmdStr, Match match)
+        {
+            iDiagMsg.WriteLine("Answering Incoming Call");
+            if (!AnswerIncomingCall())
+            {
+                return CmdRsp.Error;
+            }
+
+            CompleteConnectionNoLock(true);
+            TerminateRingNoLock();
+
+            return CmdRsp.Connect;
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
         /// ATT, enable tone dialing.
         /// </summary>
         /*************************************************************************************************************/
@@ -370,6 +390,12 @@ namespace RetroModemSim
             bool enterOnlineMode = true;
             int subStrLen = cmdStr.Length - 1, startIdx = 1;
 
+            // If we're already connected, hang up first.
+            if (connected)
+            {
+                HangupNoLock();
+            }
+
             // If the last character is a ';', then dial, but remain in command mode.
             if (cmdStr.EndsWith(";"))
             {
@@ -402,17 +428,8 @@ namespace RetroModemSim
             // See if the modem was able to connect to the destination.
             if (cmdRsp == CmdRsp.Connect)
             {
-                connected = true;
                 iDiagMsg.WriteLine($"Connected to \"{cmdStr}\"");
-
-                // Inform the DTE that we're now connected (the data carrier is detected).
-                iDTE.SetDCD(true);
-
-                // Move into online mode if requested.
-                if (enterOnlineMode)
-                {
-                    EnterOnlineDataMode();
-                }
+                CompleteConnectionNoLock(enterOnlineMode);
             }
             else
             {

@@ -30,6 +30,14 @@ namespace RetroModemSim
         /// </summary>
         protected abstract void HangUpModem();
 
+        /// <summary>
+        /// Answers an incoming call.
+        /// </summary>
+        /// <returns>
+        /// True if the incoming call (if there was one) was answered, or false if not.
+        /// </returns>
+        protected abstract bool AnswerIncomingCall();
+
         /*************************************************************************************************************/
         /// <summary>
         /// Called from derived classes when they receive data from the remote host.
@@ -57,6 +65,36 @@ namespace RetroModemSim
 
         /*************************************************************************************************************/
         /// <summary>
+        /// Called from derived classes upon an incoming connection.
+        /// </summary>
+        /// <param name="incomingIsConnecting">True if the connection is connecting, false if they have hung up.</param>
+        /*************************************************************************************************************/
+        protected void OnIncomingConnectionStateChange(bool incomingIsConnecting)
+        {
+            lock (stateLock)
+            {
+                if (incomingIsConnecting)
+                {
+                    if (!connected)
+                    {
+                        iDiagMsg.WriteLine("Incoming Call -- Initiating Ring");
+
+                        // Start the ring state as false and set the timer to fire immediately to toggle it high.
+                        ringing = true;
+                        ringState = false;
+                        RingSequenceTimer.Change(0, Timeout.Infinite);
+                    }
+                }
+                else
+                {
+                    iDiagMsg.WriteLine("Incoming Call Terminated");
+                    TerminateRingNoLock();
+                }
+            }
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
         /// Called from derived classes when they detect their connection has been disconnected.
         /// </summary>
         /*************************************************************************************************************/
@@ -72,6 +110,21 @@ namespace RetroModemSim
                 }
             }
         }
+
+        /// <summary>
+        /// Length of time the ring sequence is high. Defaults to North American value.
+        /// </summary>
+        public TimeSpan RingHighTime { get; set; } = new TimeSpan(0, 0, 2);
+
+        /// <summary>
+        /// Length of time the ring sequence is low. Defaults to North American value.
+        /// </summary>
+        public TimeSpan RingLowTime { get; set; } = new TimeSpan(0, 0, 4);
+
+        /// <summary>
+        /// The number of rings before auto-answering (S-register 0). Set to 0 to disable auto-answer.
+        /// </summary>
+        public byte RingsBeforeAnswering { get; set; } = 2;
 
         /*************************************************************************************************************/
         /// <summary>
@@ -112,7 +165,7 @@ namespace RetroModemSim
 
         const int PETSCII_START = 0xC1, PETSCII_END = 0xDA, PETSCII_SHIFT = 0x80;
         const int RESULT_CODE_ALL = int.MaxValue;
-        bool petscii, zap, connected, halfDuplex, hideResponses, numericResponses, intrmRspSent;
+        bool petscii, zap, halfDuplex, hideResponses, numericResponses, intrmRspSent, ringState, ringing;
         bool bufferOnline = true, echo = true;
         StringBuilder cmdStrBuilder;
         int escapeCharCount, resultCodeLimit = RESULT_CODE_ALL;
@@ -121,10 +174,10 @@ namespace RetroModemSim
         StateEnum state;
         IDTE iDTE;
         Stopwatch escapeSw = new Stopwatch();
-        object stateLock = new object();
         Timer EscapeSequenceTimer;
+        Timer RingSequenceTimer;
         int[] sReg = new int[(int)SRegEnum.LastValue] {
-            2,          // Rings before answering
+            0,          // Rings before answering
             0,          // Ring count
             '+',        // Escape code
             '\r',       // CR
@@ -143,6 +196,8 @@ namespace RetroModemSim
         protected IDiagMsg iDiagMsg;
         protected List<CommandHandler> cmdList = new List<CommandHandler>();
         protected delegate CmdResponse CmdHandlerDelegate(string cmdStr, Match match);
+        protected object stateLock = new object();
+        protected bool connected;
 
         /*************************************************************************************************************/
         /// <summary>
@@ -170,8 +225,10 @@ namespace RetroModemSim
             this.iDiagMsg = iDiagMsg;
 
             EscapeSequenceTimer = new Timer(OnEscapeSequenceTimeout);
+            RingSequenceTimer = new Timer(OnRingSequenceTimeout);
 
             // Install our Hayes-compatible AT command handlers.
+            cmdList.Add(new CommandHandler("^A$",                                   CmdAnswer));
             cmdList.Add(new CommandHandler("^T$",                                   CmdToneDialing));
             cmdList.Add(new CommandHandler("^P$",                                   CmdPulseDialing));
             cmdList.Add(new CommandHandler("^Z$",                                   CmdZap));
@@ -200,6 +257,50 @@ namespace RetroModemSim
             // Install the generic AT command handler last because it will match any command. Do this here instead of
             // in the constructor to allow the user to install custom commands.
             cmdList.Add(new CommandHandler("", CmdAt));
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
+        /// Terminates the ring sequence, lowers the RING signal, and resets the ring count S-register.
+        /// </summary>
+        /// <remarks>
+        /// The state lock must already be held before calling this method.
+        /// </remarks>
+        /*************************************************************************************************************/
+        void TerminateRingNoLock()
+        {
+            // Stop the ring sequence.
+            ringing = false;
+            RingSequenceTimer.Change(Timeout.Infinite, Timeout.Infinite);
+
+            // Ensure the RING signal is low.
+            iDTE.SetRING(false);
+
+            // Clear the ring count.
+            sReg[(int)SRegEnum.RingCount] = 0;
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
+        /// Completes the connection, incoming or outgoing, and optionally enters online data mode.
+        /// </summary>
+        /// <param name="enterOnlineMode">Whether to enter online data mode.</param>
+        /// <remarks>
+        /// The state lock must already be held before calling this method.
+        /// </remarks>
+        /*************************************************************************************************************/
+        void CompleteConnectionNoLock(bool enterOnlineMode)
+        {
+            connected = true;
+
+            // Inform the DTE that we're now connected (the data carrier is detected).
+            iDTE.SetDCD(true);
+
+            // Move into online mode if requested.
+            if (enterOnlineMode)
+            {
+                EnterOnlineDataMode();
+            }
         }
 
         /*************************************************************************************************************/
@@ -343,8 +444,15 @@ namespace RetroModemSim
         /*************************************************************************************************************/
         void SendFinalResponseNoLock(CmdResponse rsp)
         {
-            if ((rsp != CmdRsp.None) && (!hideResponses) && (rsp.Code <= resultCodeLimit))
+            // Inhibit responses if the responses are hidden, or are filtered out.
+            if ((!hideResponses) && (rsp.Code <= resultCodeLimit))
             {
+                // Inhibit all responses other than CONNECT while in online data mode.
+                if ((state == StateEnum.Online) && (rsp != CmdRsp.Connect))
+                {
+                    return;
+                }
+
                 // If any intermediate responses were sent, send an extra CR+LF.
                 if (intrmRspSent)
                 {
@@ -489,6 +597,49 @@ namespace RetroModemSim
 
         /*************************************************************************************************************/
         /// <summary>
+        /// Called in an arbitrary thread when the ring timer fires.
+        /// </summary>
+        /*************************************************************************************************************/
+        void OnRingSequenceTimeout(object unused)
+        {
+            lock (stateLock)
+            {
+                // Check to see if we're still ringing. It is possible for timer events to still be fired even after
+                // stopping the timer, so to ensure we do not have spurious ring events, we need to check this.
+                if (!ringing)
+                {
+                    return;
+                }
+
+                ringState = !ringState;
+                iDTE.SetRING(ringState);
+
+                if (ringState)
+                {
+                    sReg[(int)SRegEnum.RingCount]++;
+                    SendFinalResponseNoLock(CmdRsp.Ring);
+                }
+
+                RingSequenceTimer.Change(ringState ? RingHighTime : RingLowTime, Timeout.InfiniteTimeSpan);
+
+                // See if we should auto-answer. Do this after changing the ring timer.
+                if (ringState && (sReg[(int)SRegEnum.RingsBeforeAnswering] > 0) &&
+                    (sReg[(int)SRegEnum.RingCount] >= sReg[(int)SRegEnum.RingsBeforeAnswering]))
+                {
+                    if (AnswerIncomingCall())
+                    {
+                        iDiagMsg.WriteLine("Auto-Answering Incoming Call");
+
+                        SendFinalResponseNoLock(CmdRsp.Connect);
+                        CompleteConnectionNoLock(true);
+                        TerminateRingNoLock();
+                    }
+                }
+            }
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
         /// Exits online data mode and returns to command mode.
         /// </summary>
         /// <remarks>
@@ -502,7 +653,6 @@ namespace RetroModemSim
                 iDiagMsg.WriteLine("Command Mode");
                 escapeCharCount = 0;
                 state = StateEnum.AwaitingA;
-                SendFinalResponseNoLock(CmdRsp.Ok);
             }
         }
 
@@ -518,6 +668,7 @@ namespace RetroModemSim
                 if (escapeCharCount == 3)
                 {
                     ExitOnlineDataModeNoLock();
+                    SendFinalResponseNoLock(CmdRsp.Ok);
                 }
                 else
                 {
@@ -625,6 +776,9 @@ namespace RetroModemSim
         /*************************************************************************************************************/
         public void RunSimulation()
         {
+            // Initialize this here so that the user can override it after instantiation.
+            sReg[(int)SRegEnum.RingsBeforeAnswering] = RingsBeforeAnswering;
+
             // Initialize the state of the GPIOs.
             iDTE.SetDCD(false);
             iDTE.SetRING(false);
