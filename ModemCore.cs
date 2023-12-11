@@ -173,7 +173,7 @@ namespace RetroModemSim
             LastValue
         }
 
-        const int PETSCII_START = 0xC1, PETSCII_END = 0xDA, PETSCII_SHIFT = 0x80;
+        const int PETSCII_START = 0xC1, PETSCII_END = 0xDA, PETSCII_SHIFT = 0x80, PETSCII_BS = 0x14, ASCII_BS = 0x08;
         const int RESULT_CODE_ALL = int.MaxValue - 1;
         bool petscii, zap, halfDuplex, hideResponses, numericResponses, intrmRspSent, ringState, ringing;
         bool bufferOnline = true, echo = true;
@@ -192,7 +192,7 @@ namespace RetroModemSim
             '+',        // Escape code
             '\r',       // CR
             '\n',       // LF
-            8,          // Backspace
+            ASCII_BS,   // Backspace
             2,          // DialToneDelay
             30,         // CarrierDelay
             2,          // DialPause
@@ -332,11 +332,13 @@ namespace RetroModemSim
         /*************************************************************************************************************/
         int TranslateFromPetscii(int inChar)
         {
+            // If we're waiting for the 'A', set PETSCII mode based upon whether the received the PETSCII-encoded 'A'.
             if (state == StateEnum.AwaitingA)
             {
                 petscii = (inChar == PETSCII_START);
             }
 
+            // Perform PETSCII translation if we're in PETSCII mode.
             if (petscii && (inChar >= PETSCII_START) && (inChar <= PETSCII_END))
             {
                 return inChar - PETSCII_SHIFT;
@@ -568,7 +570,13 @@ namespace RetroModemSim
                         {
                             ExecuteCmd();
                         }
-                        else if (inChar == sReg[(int)SRegEnum.BS])
+                        // Perform backspace if the character matches the backspace register, or if the character is
+                        // a PETSCII backspace character (regardless of PETSCII mode). The reason is that when C64/128
+                        // terminal applications are in graphics mode, they send the PETSCII backspace character, but
+                        // they do this even if they send an ASCII version of the AT command (lowercase AT commands
+                        // when in graphics (PETSCII) mode). The ASCII-equivalent of the PETSCII BS key is DC4, which
+                        // is rarely used, so there is little risk of it being misinterpreted when in ASCII mode.
+                        else if ((inChar == sReg[(int)SRegEnum.BS]) || (inChar == PETSCII_BS))
                         {
                             if (cmdStrBuilder.Length > 0)
                             {
