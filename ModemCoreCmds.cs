@@ -69,6 +69,48 @@ namespace RetroModemSim
 
         /*************************************************************************************************************/
         /// <summary>
+        /// Installs all the commands supported in this file.
+        /// </summary>
+        /*************************************************************************************************************/
+        void InstallCoreCommands()
+        {
+            // Install our Hayes-compatible AT command handlers.
+            cmdList.Add(new CommandHandler("^A$",                                   CmdAnswer));
+            cmdList.Add(new CommandHandler("^T$",                                   CmdToneDialing));
+            cmdList.Add(new CommandHandler("^P$",                                   CmdPulseDialing));
+            cmdList.Add(new CommandHandler("^Z$",                                   CmdZap));
+            cmdList.Add(new CommandHandler("^O$",                                   CmdOnline));
+            cmdList.Add(new CommandHandler("^C[01]?$",                              CmdCarrier));
+            cmdList.Add(new CommandHandler("^E[01]?$",                              CmdEcho));
+            cmdList.Add(new CommandHandler("^F[01]?$",                              CmdDuplex));
+            cmdList.Add(new CommandHandler("^H[01]?$",                              CmdHangup));
+            cmdList.Add(new CommandHandler("^Q[01]?$",                              CmdQuiet));
+            cmdList.Add(new CommandHandler("^V[01]?$",                              CmdVerbal));
+            cmdList.Add(new CommandHandler("^M[012]?$",                             CmdMonitor));
+            cmdList.Add(new CommandHandler("^X[012]?$",                             CmdResultCodeSet));
+            cmdList.Add(new CommandHandler("^D.*$",                                 CmdDial));
+            cmdList.Add(new CommandHandler("^S(?<reg>\\d+)\\?$",                    CmdSRegQuery));
+            cmdList.Add(new CommandHandler("^S(?<reg>\\d+)=(?<val>\\d+)$",          CmdSRegSet));
+
+            // Install our extended AT command handlers.
+            cmdList.Add(new CommandHandler("^\\+IPR=(?<baud>\\d+)$",                CmdSetBaud));
+            cmdList.Add(new CommandHandler("^\\+IPR\\?$",                           CmdBaudQuery));
+
+            // Install our custom AT command handlers
+            cmdList.Add(new CommandHandler("^\\$B[01]?$",                           CmdBufferOnline));
+            cmdList.Add(new CommandHandler("^\\$SWFC[01]?$",                        CmdSoftwareFlowControl));
+            cmdList.Add(new CommandHandler("^\\$SWFC\\?$",                          CmdSoftwareFlowControlQuery));
+            cmdList.Add(new CommandHandler("^\\$PB=(?<key>.+),(?<value>.+)$",       CmdPhoneBookAdd));
+            cmdList.Add(new CommandHandler("^\\$PB\\?$",                            CmdPhoneBookQuery));
+            cmdList.Add(new CommandHandler("^\\$PB=(?<key>.+)$",                    CmdPhoneBookDelete));
+
+            // Install the generic AT command handler last because it will match any command. Do this here instead of
+            // in the constructor to allow the user to install custom commands.
+            cmdList.Add(new CommandHandler("", CmdAt));
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
         /// ATX, Result Code Set Selection
         /// </summary>
         /*************************************************************************************************************/
@@ -450,24 +492,53 @@ namespace RetroModemSim
         /// AT+IPR={baud}, change the baud rate.
         /// </summary>
         /// <remarks>
-        /// The baud rate is immediately set, and so the command response will be sent at the new baud rate.
+        /// The response is sent at the original baud rate.
         /// </remarks>
         /*************************************************************************************************************/
         CmdResponse CmdSetBaud(string cmdStr, Match match)
         {
             int baud = int.Parse(match.Groups["baud"].Value);
+            int currentBaud = iDTE.Baud;
 
             try
             {
                 iDiagMsg.WriteLine($"Setting baud rate to {baud}.");
-                iDTE.SetBaud(baud);
+
+                // Try to set the new baud rate to see if the baud rate is supported or not.
+                iDTE.Baud = baud;
+
+                // Now switch back to the original baud rate and send the OK response at the original rate.
+                iDTE.Baud = currentBaud;
+                SendFinalResponseNoLock(CmdRsp.Ok);
+
+                // Wait for a while for the response to be sent in full at the original baud rate.
+                Thread.Sleep(BaudChangeDelay);
+
+                // Finally, switch to the new baud rate.
+                iDTE.Baud = baud;
+
+                // Return a special response that indicates that the modem core will not send any response.
+                return CmdRsp.None;
             }
             catch(Exception ex)
             {
+                // Restore the baud rate to the original value.
+                iDTE.Baud = currentBaud;
+
+                // Indicate that the given baud rate cannot be set.
                 iDiagMsg.WriteLine($"Failed to set baud rate to {baud}: {ex.Message}");
                 return CmdRsp.Error;
             }
+        }
 
+        /*************************************************************************************************************/
+        /// <summary>
+        /// AT+IPR?, Query the current baud rate.
+        /// </summary>
+        /*************************************************************************************************************/
+        CmdResponse CmdBaudQuery(string cmdStr, Match match)
+        {
+            SendIntermediateResponseNoLock($"+IPR: {iDTE.Baud}");
             return CmdRsp.Ok;
         }
 
@@ -557,6 +628,39 @@ namespace RetroModemSim
                 iDiagMsg.WriteLine("Online Data Mode Buffering Enabled");
                 bufferOnline = true;
             }
+
+            return CmdRsp.Ok;
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
+        /// AT$SWFC, Enable/disable XON/XOFF flow control.
+        /// </summary>
+        /*************************************************************************************************************/
+        CmdResponse CmdSoftwareFlowControl(string cmdStr, Match match)
+        {
+            if ((cmdStr.Length > 5) && (cmdStr[5] == '1'))
+            {
+                iDTE.SoftwareFlowControl = true;
+                iDiagMsg.WriteLine("XON/XOFF Flow Control Enabled");
+            }
+            else
+            {
+                iDTE.SoftwareFlowControl = false;
+                iDiagMsg.WriteLine("XON/XOFF Flow Control Disabled");
+            }
+
+            return CmdRsp.Ok;
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
+        /// AT$SWFC?, Query the value of XON/XOFF flow control.
+        /// </summary>
+        /*************************************************************************************************************/
+        CmdResponse CmdSoftwareFlowControlQuery(string cmdStr, Match match)
+        {
+            SendIntermediateResponseNoLock($"$SWFC: {(iDTE.SoftwareFlowControl ? "1" : "0")}");
             return CmdRsp.Ok;
         }
     }

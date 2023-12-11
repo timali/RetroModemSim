@@ -42,31 +42,58 @@ namespace RetroModemSim
         /// <summary>
         /// Set the Data Carrier Detect signal on the DTE.
         /// </summary>
-        /// <param name="asserted"></param>
-        public void SetDCD(bool asserted)
+        public bool DCD
         {
-            // Most NULL-modem cables wire DTR to the DCD pin on the other side. The C64/128 terminal programs I
-            // use (AA term) seem to have inverted DCD logic, so invert the signal before setting it.
-            port.DtrEnable = !asserted;
+            set
+            {
+                // Most NULL-modem cables wire DTR to the DCD pin on the other side. The C64/128 terminal programs I
+                // use (AA term) seem to have inverted DCD logic, so invert the signal before setting it.
+                port.DtrEnable = !value;
+            }
         }
 
         /// <summary>
         /// Set the Ring signal on the DTE.
         /// </summary>
-        /// <param name="asserted"></param>
-        public void SetRING(bool asserted)
+        public bool RING
         {
-            // The NULL modem cable I am using connects RTS to the RING signal on the DTE.
-            port.RtsEnable = asserted;
+            set
+            {
+                // The NULL modem cable I am using connects RTS to the RING signal on the DTE.
+                port.RtsEnable = value;
+            }
         }
 
         /// <summary>
-        /// Set the baud rate on the DTE.
+        /// The current baud rate.
         /// </summary>
-        /// <param name="baud"></param>
-        public void SetBaud(int baud)
+        public int Baud
         {
-            port.BaudRate = baud;
+            get
+            {
+                return port.BaudRate;
+            }
+
+            set
+            {
+                port.BaudRate = value;
+            }
+        }
+
+        /// <summary>
+        /// Whether XON/XOFF flow control is enabled.
+        /// </summary>
+        public bool SoftwareFlowControl
+        {
+            get
+            {
+                return port.Handshake == Handshake.XOnXOff;
+            }
+
+            set
+            {
+                port.Handshake = Handshake.XOnXOff;
+            }
         }
     }
 }

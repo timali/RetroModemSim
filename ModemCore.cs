@@ -131,6 +131,11 @@ namespace RetroModemSim
         /// </summary>
         public byte RingsBeforeAnswering { get; set; } = 2;
 
+        /// <summary>
+        /// When changing baud rate, how long to wait for the response to be sent before changing to the new baud rate.
+        /// </summary>
+        public TimeSpan BaudChangeDelay { get; set; } = new TimeSpan(0, 0, 0, 0, 500);
+
         /*************************************************************************************************************/
         /// <summary>
         /// The various states the modem can be in.
@@ -169,7 +174,7 @@ namespace RetroModemSim
         }
 
         const int PETSCII_START = 0xC1, PETSCII_END = 0xDA, PETSCII_SHIFT = 0x80;
-        const int RESULT_CODE_ALL = int.MaxValue;
+        const int RESULT_CODE_ALL = int.MaxValue - 1;
         bool petscii, zap, halfDuplex, hideResponses, numericResponses, intrmRspSent, ringState, ringing;
         bool bufferOnline = true, echo = true;
         StringBuilder cmdStrBuilder;
@@ -232,36 +237,7 @@ namespace RetroModemSim
             EscapeSequenceTimer = new Timer(OnEscapeSequenceTimeout);
             RingSequenceTimer = new Timer(OnRingSequenceTimeout);
 
-            // Install our Hayes-compatible AT command handlers.
-            cmdList.Add(new CommandHandler("^A$",                                   CmdAnswer));
-            cmdList.Add(new CommandHandler("^T$",                                   CmdToneDialing));
-            cmdList.Add(new CommandHandler("^P$",                                   CmdPulseDialing));
-            cmdList.Add(new CommandHandler("^Z$",                                   CmdZap));
-            cmdList.Add(new CommandHandler("^O$",                                   CmdOnline));
-            cmdList.Add(new CommandHandler("^C[01]?$",                              CmdCarrier));
-            cmdList.Add(new CommandHandler("^E[01]?$",                              CmdEcho));
-            cmdList.Add(new CommandHandler("^F[01]?$",                              CmdDuplex));
-            cmdList.Add(new CommandHandler("^H[01]?$",                              CmdHangup));
-            cmdList.Add(new CommandHandler("^Q[01]?$",                              CmdQuiet));
-            cmdList.Add(new CommandHandler("^V[01]?$",                              CmdVerbal));
-            cmdList.Add(new CommandHandler("^M[012]?$",                             CmdMonitor));
-            cmdList.Add(new CommandHandler("^X[012]?$",                             CmdResultCodeSet));
-            cmdList.Add(new CommandHandler("^D.*$",                                 CmdDial));
-            cmdList.Add(new CommandHandler("^S(?<reg>\\d+)\\?$",                    CmdSRegQuery));
-            cmdList.Add(new CommandHandler("^S(?<reg>\\d+)=(?<val>\\d+)$",          CmdSRegSet));
-
-            // Install our extended AT command handlers.
-            cmdList.Add(new CommandHandler("^\\+IPR=(?<baud>\\d+)$",                CmdSetBaud));
-
-            // Install our custom AT command handlers
-            cmdList.Add(new CommandHandler("^\\$B[01]?$",                           CmdBufferOnline));
-            cmdList.Add(new CommandHandler("^\\$PB=(?<key>.+),(?<value>.+)$",       CmdPhoneBookAdd));
-            cmdList.Add(new CommandHandler("^\\$PB\\?$",                            CmdPhoneBookQuery));
-            cmdList.Add(new CommandHandler("^\\$PB=(?<key>.+)$",                    CmdPhoneBookDelete));
-
-            // Install the generic AT command handler last because it will match any command. Do this here instead of
-            // in the constructor to allow the user to install custom commands.
-            cmdList.Add(new CommandHandler("", CmdAt));
+            InstallCoreCommands();
         }
 
         /*************************************************************************************************************/
@@ -279,7 +255,7 @@ namespace RetroModemSim
             RingSequenceTimer.Change(Timeout.Infinite, Timeout.Infinite);
 
             // Ensure the RING signal is low.
-            iDTE.SetRING(false);
+            iDTE.RING = false;
 
             // Clear the ring count.
             sReg[(int)SRegEnum.RingCount] = 0;
@@ -299,7 +275,7 @@ namespace RetroModemSim
             connected = true;
 
             // Inform the DTE that we're now connected (the data carrier is detected).
-            iDTE.SetDCD(true);
+            iDTE.DCD = true;
 
             // Move into online mode if requested.
             if (enterOnlineMode)
@@ -321,7 +297,7 @@ namespace RetroModemSim
             if (connected)
             {
                 iDiagMsg.WriteLine("Hanging Up");
-                iDTE.SetDCD(false);
+                iDTE.DCD = false;
                 HangUpModem();
                 connected = false;
                 onlineDataBuffer.Clear();
@@ -489,19 +465,27 @@ namespace RetroModemSim
             {
                 CmdResponse rsp = null;
 
-                // Search our list of commands for one matching the one received.
-                foreach (CommandHandler cmd in cmdList)
+                try
                 {
-                    if ((rsp = cmd.ExecuteCommand(cmdStrBuilder.ToString())) != null)
+                    // Search our list of commands for one matching the one received.
+                    foreach (CommandHandler cmd in cmdList)
                     {
-                        SendFinalResponseNoLock(rsp);
-                        break;
+                        if ((rsp = cmd.ExecuteCommand(cmdStrBuilder.ToString())) != null)
+                        {
+                            SendFinalResponseNoLock(rsp);
+                            break;
+                        }
+                    }
+
+                    // No command handler for the given command, so alert the user.
+                    if (rsp == null)
+                    {
+                        SendFinalResponseNoLock(CmdRsp.Error);
                     }
                 }
-
-                // No command handler for the given command, so alert the user.
-                if (rsp == null)
+                catch (Exception ex)
                 {
+                    iDiagMsg.WriteLine("Error processing command: " + ex.Message);
                     SendFinalResponseNoLock(CmdRsp.Error);
                 }
 
@@ -617,7 +601,7 @@ namespace RetroModemSim
                 }
 
                 ringState = !ringState;
-                iDTE.SetRING(ringState);
+                iDTE.RING = ringState;
 
                 if (ringState)
                 {
@@ -785,8 +769,8 @@ namespace RetroModemSim
             sReg[(int)SRegEnum.RingsBeforeAnswering] = RingsBeforeAnswering;
 
             // Initialize the state of the GPIOs.
-            iDTE.SetDCD(false);
-            iDTE.SetRING(false);
+            iDTE.DCD = false;
+            iDTE.RING = false;
 
             // Process data until the ZAP command is executed, which resets everything to the default.
             while (!zap)

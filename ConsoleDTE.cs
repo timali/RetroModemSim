@@ -30,25 +30,21 @@
         /// <summary>
         /// Set the Data Carrier Detect signal on the DTE.
         /// </summary>
-        /// <param name="asserted"></param>
-        public void SetDCD(bool asserted)
-        {
-        }
+        public bool DCD { set { } }
 
         /// <summary>
         /// Set the Ring signal on the DTE.
         /// </summary>
-        /// <param name="asserted"></param>
-        public void SetRING(bool asserted)
-        {
-        }
+        public bool RING { set { } }
 
         /// <summary>
-        /// Set the baud rate on the DTE.
+        /// The current baud rate.
         /// </summary>
-        /// <param name="baud"></param>
-        public void SetBaud(int baud)
-        {
-        }
+        public int Baud { get; set; }
+
+        /// <summary>
+        /// Whether XON/XOFF flow control is enabled.
+        /// </summary>
+        public bool SoftwareFlowControl { get; set; }
     }
 }
