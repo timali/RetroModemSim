@@ -25,7 +25,7 @@
                 else
                 {
                     Console.WriteLine();
-                    Console.WriteLine("Usage: RetroModemSim comport=<COM port> baud=<baud rate> incomingport=<TCP port>");
+                    Console.WriteLine("Usage: RetroModemSim comport=<COM_port> baud=<baud_rate> incomingport=<TCP_port>");
                     Console.WriteLine();
                     Console.WriteLine("Baud rate defaults to 2400 if unspecified.");
                     Console.WriteLine();

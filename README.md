@@ -1,2 +1,275 @@
 # RetroModemSim
-Simulates an old-school analog modem, allowing retro computers to access BBSs via the Internet.
+
+Simulates an old-school, Hayes-compatible analog modem using TCP/IP, allowing retro computers to access BBSs and other machines via the Internet or any TCP/IP network.
+
+Instead of dialing a phone number, you "dial" a host on the Internet, using either a domain name or an IP address, and optionally a port. Incoming connections are also supported, allowing your retro PC to receive incoming "calls" from the Internet or your network.
+
+Not only can you use RetroModemSim to dial up BBSs, but you can also use it as a wireless or Internet null-modem cable. For example, you can connect your C64 to your Tandy 1000 wirelessly using two instances of RetroModemSim -- one calling the other -- to establish the virtual null-modem connection over your Wi-Fi or even the Internet.
+
+RetroModemSim is written using .NET 6, so it can easily be run on Windows, Linux, or MacOS. My favorite is to set it up on a Raspberry Pi, configured to run RetroModemSim on startup, so the Pi acts as a modem for any of my retro machines with an RS-232 port.
+
+# Features
+
+ - Hayes command set, plus extended and proprietary commands
+ - PETSCII support, for use with your favorite Commodore machines
+ - Full online/offline data mode support, with +++ escape sequence
+ - Built-in phonebook, configurable via AT commands
+ - Support for incoming connections, including auto-answer
+ - Query and change the baud rate via AT command
+ - Software (XOn/XOff) support, configurable via AT command
+ - Accurate RING simulation, including auto-answer
+ - DCD simulation
+ - Accurate support for a variety of S-registers
+ - Can be used with the console instead of a COM port
+ 
+# Usage
+
+    RetroModemSim comport=<COM_port> baud=<baud_rate> incomingport=<TCP_port>
+    
+    Baud rate defaults to 2400 if unspecified.
+    
+    Incomingport defaults to 60000 if unspecified. If incomingport is 0, incoming calls are disabled.
+    
+    If comport is unspecified, then the console will be used to interact with the modem.
+
+## Examples:
+Start on a Linux system using the first USB RS-232 adapter at 19200 baud, accepting incoming connections on port `60000`:
+> RetroModemSim comport=/dev/ttyUSB0 baud=19200
+
+Start on a Windows system using `COM4` at the default baud rate of `2400`, disabling incoming connections:
+> RetroModemSim comport=COM4 incomingport=0
+
+# Dialing and Call Management
+
+## Dialing
+Dial the Particles BBS on port `6400`: 
+
+> ATD@PARTICLESBBS.DYNDNS.ORG:6400
+
+Dial `192.168.0.100` on port `1234`:
+
+> ATD@192.168.0.100:1234
+
+When dialing a destination, the `@` is optional if the destination does not begin with a `T` or `P`, but required if it does (otherwise the `T` or `P` is interpreted as touch-tone or pulse dialing.
+
+## Dialing from Phone Book
+If the dialing destination matches a phone book entry name, then the phone book entry is dialed.
+
+Dial phone book entry named `#1`:
+
+> ATD@#1
+ 
+or
+
+> ATD#1
+
+## Dialing Touch-Tone or Pulse
+You can specify tone or pulse dialing with `T` or `P`, although these have no effect.
+
+Dial the Particles BBS using touch-tone dialing:
+
+    ATDT@PARTICLESBBS.DYNDNS.ORG:6400
+ 
+## Dial, But Remain in Command Mode
+If you end the dial command with `;` the modem will dial, but you will remain in command mode:
+
+> ATD@PARTICLESBBS.DYNDNS.ORG:6400;
+
+If the connection is established, you will see `CONNECT`. You can then enter online mode with `ATO`.
+
+## Hang Up (Terminate Remote Connection)
+
+You can terminate a remote connection while in command mode:
+> ATH
+
+Note that if you are in online data mode, you must first return to command mode by issuing the escape sequence `+++`.
+
+# Command Mode vs. Online Data Mode
+When RetroModemSim starts, the modem is in command mode, where you can enter AT commands.
+
+When a connection is established, the modem typically enters online data mode, where every character you type is sent to the remote destination.
+
+You can switch between command mode and online data mode via the escape sequence and the `ATO` command.
+
+## Exiting Online Data Mode and Returning to Command Mode
+To return to command mode from online data mode, you can issue the escape sequence:
+
+ - Wait one second
+ - Quickly type `+++`, with very little time between each `+`
+ - Wait one second
+
+You will see `OK`, and you will be back in command mode, ready to issue AT commands.
+
+Note that proper timing is critical when issuing the escape sequence. Also note that the escape sequence timing and character value depend on the value of several S registers, which can be changed.
+
+## Returning on Online Data Mode
+If you are in command mode, and you are connected to a remote host, you can return to online data mode:
+
+> ATO
+
+# Incoming Calls
+If RetroModemSim is not started with the `incomingport=0` option, then it listens for incoming calls on the specified TCP/IP port (default is 60000).
+
+When a call is incoming, and there is not already a connection established, `RING` will be displayed each time the virtual phone rings, and the `RI` pin will be asserted.
+
+You can manually answer an incoming call:
+
+> ATA
+
+S-register 0 `S0` specifies the number of rings before an incoming call is auto-answered. It defaults to `2`, so by default, an incoming call will be auto-answered after about two seconds.
+
+You can disable automatic answering by setting `S0` to `0`:
+> ATS0=0
+
+# Baud Rate
+The default baud rate is set according to the command-line parameter `baud`. If not specified, it defaults to `2400`.
+
+You can query the current baud rate:
+> AT+IPR?
+
+You can change the current baud rate, for example to `9600`:
+> AT+IPR=9600
+
+When changing the baud rate, the command response is sent using the *original* baud rate. After the response is sent, the new baud rate will become active.
+
+# Phone Book
+Phone book entries can be created as a shortcut to dialing. Each phone book entry consists of a name and a value.
+
+When dialing, if the destination specified in the dial command matches a phone book name, then the phone book value is dialed.
+
+Query all phonebook entries:
+> AT$PB?
+
+Add a new phone book entry named `#1`, which dials `LOCALHOST:50000`:
+> AT$PB=#1,LOCALHOST:50000
+
+Delete the phone book entry named `#1`:
+> AT$PB=#1
+
+# Misc.
+
+## Online Data Mode Buffering
+
+Buffer data received when connected while in command mode (buffered data will be received when returning to online data mode):
+> AT$B1
+
+Do not buffer data when connected while in command mode. Any data received when connected while in command mode is discarded:
+> AT$B0
+
+## Software Flow Control (XOn/XOff)
+Enable software flow control:
+> AT$SWFC=1
+
+Disable software flow control:
+> AT$SWFC
+> 
+> AT$SWCF=0
+
+Query the current status of software flow control:
+> AT$SWFC?
+
+## S-Registers
+There are several S-registers which control various aspects of the modem simulation:
+
+| S-Register  | Description                 
+|-------------|--------------------------------------------------
+| 0           | Number of rings before automatically answering
+| 1           | Number of rings so far
+| 2           | Escape character
+| 3           | CR character
+| 4           | LF character
+| 5           | BS character
+| 6           | Dial tone delay (unused)
+| 7           | Carrier delay (unused)
+| 8           | Dial pulse (unused)
+| 9           | Unused
+| 10          | Carrier loss delay (unused)
+| 11          | Touch tone delay (unused)
+| 12          | Escape sequence guard time
+
+You can query the value of an S-register, for example, the number of rings so far:
+> ATS1?
+
+You can set the value of an S-register, for example, to set the number of rings to 10 before auto-answering:
+> ATS1=10
+
+## Tone/Pulse Dialing
+These commands are recognized, but have no effect:
+> ATT
+> ATP
+
+## Zap
+This command resets all settings to the default (this does not affect the phone book)
+>ATZ
+
+## Carrier
+This command is recognized, but has no effect:
+
+Enable carrier:
+> ATC
+> ATC0
+
+Disable carrier:
+> ATC1
+
+## Echo On/Off
+Enable echo:
+> ATE
+> ATE1
+
+Disable echo:
+> ATE0
+
+## Full/Half Duplex
+Full-duplex mode:
+> ATF
+> ATF1
+
+Half-duplex mode:
+> ATF0
+
+## Quiet Mode
+Enable quiet mode (hides command responses):
+> ATQ1
+
+Disable quiet mode (shows command responses):
+> ATQ
+> ATQ0
+
+## Verbal Mode
+Enable verbal mode (use text responses):
+> ATV
+> ATV1
+
+Disable verbal mode (use numerical responses):
+> ATV0
+
+## Monitor
+This command is recognized, but has no effect:
+
+Speaker on when in command mode:
+> ATM
+> ATM1
+
+Speaker off:
+> ATM0
+
+Speaker on (always):
+> ATM2
+
+## Result Code Set
+Display all result codes:
+> ATX
+> ATX2
+
+Only display result codes 0-4:
+> ATX0
+
+Only display result codes 0-5:
+> ATX1
+
+## Repeat the Last AT command:
+
+> A/
+
+Note that the command is executed as `A/` is entered, and no `CR` is required.
