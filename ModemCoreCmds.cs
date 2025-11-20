@@ -462,6 +462,13 @@ namespace RetroModemSim
             // Remove the beginning D, and the ';' if necessary.
             cmdStr = cmdStr.Substring(startIdx, subStrLen);
 
+            // If the destination starts with an '@', the '@' is ignored. This is useful when connecting to hosts that
+            // begin with a T or a P, as the T will be interpreted as the touch-tone or pulse indicator.
+            if (cmdStr.StartsWith('@'))
+            {
+                cmdStr = cmdStr.Substring(1);
+            }
+
             // See if the entry is in our phonebook.
             string phoneBookValue = phoneBook.GetEntry(cmdStr);
             if (phoneBookValue != null)

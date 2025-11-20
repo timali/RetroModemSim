@@ -109,10 +109,6 @@ namespace RetroModemSim
         /// </summary>
         /// <param name="destination">A string describing the remote destination.</param>
         /// <returns>The connect command upon success, or any other response upon error.</returns>
-        /// <remarks>
-        /// If the destination starts with an '@', the '@' is ignored. This is useful when connecting to hosts that
-        /// begin with a T or a P, as the T will be interpreted as the touch-tone or pulse indicator.
-        /// </remarks>
         /// <remarks>The state stock is already acquired when calling this method.</remarks>
         /*************************************************************************************************************/
         protected override CmdResponse Dial(string destination)
@@ -139,12 +135,7 @@ namespace RetroModemSim
             {
                 try
                 {
-                    // Remove the '@' from the beginning of the string if present.
                     string destStr = splitArr[0];
-                    if (destStr.StartsWith('@'))
-                    {
-                        destStr = destStr.Substring(1);
-                    }
 
                     // Create the client, which automatically connects.
                     tcpClient = new TcpClient(destStr, port);
