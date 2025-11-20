@@ -22,6 +22,15 @@ RetroModemSim is written using .NET 6, so it can easily be run on Windows, Linux
  - Accurate support for a variety of S-registers
  - Can be used with the console instead of a COM port
  
+# PETSCII Support
+AT commands can be issued either in ASCII or PETSCII, which is useful (and sometimes required) on Commodore computers.
+
+ASCII vs. PETSCII is auto-detected at the beginning of each AT command, so for example, one AT command can be issued in ASCII, and the next can be issued in PETSCII.
+ 
+ The one exception is the backspace character. The backspace character is specified in S-register 5 (defaults to 0x08), but a PETSCII backspace character (0x14) will always be interpreted as a backspace, even if the AT command was started in ASCII mode.
+
+This is because when some C64/C128 terminal applications are in graphics mode, they send a PETSCII backspace character, even if they send the AT command in ASCII mode.
+ 
 # Usage
 
     RetroModemSim comport=<COM_port> baud=<baud_rate> incomingport=<TCP_port>
@@ -273,3 +282,25 @@ Only display result codes 0-5:
 > A/
 
 Note that the command is executed as `A/` is entered, and no `CR` is required.
+
+# Null-Modem Example
+Suppose you want to create a virtual NULL-modem connection between two remote retro machines.
+
+One retro machine is connected to RetroModemSim running on a Raspberry Pi with local IP address `192.168.0.100`. This machine will receive an incoming call from the other, so the default settings are ok, and port `60000` will be used.
+
+The other retro machine is connected to another Raspberry Pi. This machine will dial the first machine at its IP address and port:
+> ATD@192.168.0.100:60000
+
+The first machine will indicate the incoming call, and with the default settings, will auto-answer after two virtual rings. Once the incoming call is answered, both RetroModemSims will go into online data mode, and the two retro machines will be connected via a virtual NULL-modem cable.
+
+# PC Connection Example
+Suppose you want to transfer a file using X-modem from your modern PC to your retro machine. In this case, you can use a terminal emulator that supports file transfers, and supports using TCP/IP connections.
+
+Let's use ClearTerminal as an example. In this case, we use ClearTerminal to create a TCP server connection on some port, let's say `55000`. And suppose our PC's IP address is `192.168.0.123`.
+
+Then on the retro machine, we can simply connect to the PC:
+> ATD@192.168.0.123:55000
+
+Once connected, we can use X-Modem to transfer files to/from the retro machine.
+
+Or, if your PC terminal program only supports creating TCP client connections, then you can initiate an incoming call to the RetroModemSim machine.
