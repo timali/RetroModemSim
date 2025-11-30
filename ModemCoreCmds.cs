@@ -118,15 +118,15 @@ namespace RetroModemSim
             cmdList.Add(new CommandHandler("^\\$SWFC\\?$",                              CmdSoftwareFlowControlQuery));
 
             // DSR output configuration commands.
-            cmdList.Add(new CommandHandler("^\\$DSR=(?<inv>!?)(?<sig>(?:DTR|RTS|))$",   CmdDSRCfg));
+            cmdList.Add(new CommandHandler("^\\$DSR=(?<inv>!?)(?<sig>(?:DTR|RTS|NONE))$", CmdDSRCfg));
             cmdList.Add(new CommandHandler("^\\$DSR\\?$",                               CmdDSRCfgQuery));
 
             // DCD output configuration commands.
-            cmdList.Add(new CommandHandler("^\\$DCD=(?<inv>!?)(?<sig>(?:DTR|RTS|))$",   CmdDCDCfg));
+            cmdList.Add(new CommandHandler("^\\$DCD=(?<inv>!?)(?<sig>(?:DTR|RTS|NONE))$", CmdDCDCfg));
             cmdList.Add(new CommandHandler("^\\$DCD\\?$",                               CmdDCDCfgQuery));
 
             // RING output configuration commands.
-            cmdList.Add(new CommandHandler("^\\$RING=(?<inv>!?)(?<sig>(?:DTR|RTS|))$",  CmdRINGCfg));
+            cmdList.Add(new CommandHandler("^\\$RING=(?<inv>!?)(?<sig>(?:DTR|RTS|NONE))$", CmdRINGCfg));
             cmdList.Add(new CommandHandler("^\\$RING\\?$",                              CmdRINGCfgQuery));
 
             // Phonebook commands.
@@ -708,8 +708,8 @@ namespace RetroModemSim
         /*************************************************************************************************************/
         CmdResponse CmdDSRCfg(string cmdStr, Match match)
         {
-            iDiagMsg.WriteLine($"DSR={iDCE.DSRCfg}");
             iDCE.DSRCfg = ParseOutputCfg(cmdStr, match);
+            iDiagMsg.WriteLine($"DSR={iDCE.DSRCfg}");
 
             return CmdRsp.Ok;
         }
@@ -732,8 +732,8 @@ namespace RetroModemSim
         /*************************************************************************************************************/
         CmdResponse CmdDCDCfg(string cmdStr, Match match)
         {
-            iDiagMsg.WriteLine($"DCD={iDCE.DCDCfg}");
             iDCE.DCDCfg = ParseOutputCfg(cmdStr, match);
+            iDiagMsg.WriteLine($"DCD={iDCE.DCDCfg}");
 
             return CmdRsp.Ok;
         }
@@ -756,8 +756,8 @@ namespace RetroModemSim
         /*************************************************************************************************************/
         CmdResponse CmdRINGCfg(string cmdStr, Match match)
         {
-            iDiagMsg.WriteLine($"RING={iDCE.RINGCfg}");
             iDCE.RINGCfg = ParseOutputCfg(cmdStr, match);
+            iDiagMsg.WriteLine($"RING={iDCE.RINGCfg}");
 
             return CmdRsp.Ok;
         }

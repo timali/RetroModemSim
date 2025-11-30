@@ -174,6 +174,14 @@ Now suppose your retro application requires the DSR signal, and your cable wires
 ## Persistence
 DSR/DCD/RING configuration is persistent across power cycles, and are not affected by the zap (`ATZ`) command.
 
+You can un-assign DCD/DSR/RING output configuration by assigning it to `NONE`:
+
+> AT$DCD=NONE
+>
+> AT$DSR=NONE
+>
+> AT$RING=NONE 
+
 ## Querying Configuration
 You can query the current DSR/DCD/RING configuration:
 
