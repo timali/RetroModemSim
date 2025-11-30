@@ -109,7 +109,7 @@ namespace RetroModemSim
             cmdList.Add(new CommandHandler("^V[01]?",                                   CmdVerbal));
             cmdList.Add(new CommandHandler("^M[012]?",                                  CmdMonitor));
             cmdList.Add(new CommandHandler("^X[012]?",                                  CmdResultCodeSet));
-            cmdList.Add(new CommandHandler("^D.*",                                      CmdDial));
+            cmdList.Add(new CommandHandler("^D(?<tp>[TP]?)@?(?<dst>.*?)(?<cmd>;?)$",    CmdDial));
             cmdList.Add(new CommandHandler("^S(?<reg>\\d+)\\?",                         CmdSRegQuery));
             cmdList.Add(new CommandHandler("^S(?<reg>\\d+)=(?<val>\\d+)",               CmdSRegSet));
 
@@ -443,8 +443,8 @@ namespace RetroModemSim
         /*************************************************************************************************************/
         CmdResponse CmdDial(string cmdStr, Match match)
         {
-            bool enterOnlineMode = true;
-            int subStrLen = cmdStr.Length - 1, startIdx = 1;
+            string dialType = "";
+            string destination = match.Groups["dst"].Value;
 
             // If there is an incoming call, then terminate it.
             if (ringing)
@@ -458,51 +458,36 @@ namespace RetroModemSim
                 HangupNoLock();
             }
 
-            // If the last character is a ';', then dial, but remain in command mode.
-            if (cmdStr.EndsWith(";"))
+            // See what kind of dialling we're using.
+            if (match.Groups["tp"].Value == "T")
             {
-                // Remove the semicolon before giving the string to the modem for dialing.
-                subStrLen--;
-                enterOnlineMode = false;
+                dialType = "(tone) ";
             }
-
-            // Remove the touch-tone or pulse dialing indicator if present.
-            if ((cmdStr.Length >= 2) && ((cmdStr[1] == 'T') || (cmdStr[1] == 'P')))
+            else if (match.Groups["tp"].Value == "P")
             {
-                startIdx++;
-                subStrLen--;
-            }
-
-            // Remove the beginning D, and the ';' if necessary.
-            cmdStr = cmdStr.Substring(startIdx, subStrLen);
-
-            // If the destination starts with an '@', the '@' is ignored. This is useful when connecting to hosts that
-            // begin with a T or a P, as the T will be interpreted as the touch-tone or pulse indicator.
-            if (cmdStr.StartsWith('@'))
-            {
-                cmdStr = cmdStr.Substring(1);
+                dialType = "(pulse) ";
             }
 
             // See if the entry is in our phonebook.
-            string phoneBookValue = phoneBook.GetEntry(cmdStr);
+            string phoneBookValue = phoneBook.GetEntry(destination);
             if (phoneBookValue != null)
             {
-                cmdStr = phoneBookValue;
+                destination = phoneBookValue;
             }
 
             // Use our modem instance to dial the remote destination.
-            iDiagMsg.WriteLine($"Dialing \"{cmdStr}\"...");
-            CmdResponse cmdRsp = Dial(cmdStr);
+            iDiagMsg.WriteLine($"Dialing {dialType}\"{destination}\"...");
+            CmdResponse cmdRsp = Dial(destination);
 
             // See if the modem was able to connect to the destination.
             if (cmdRsp == CmdRsp.Connect)
             {
-                iDiagMsg.WriteLine($"Connected to \"{cmdStr}\"");
-                CompleteConnectionNoLock(enterOnlineMode);
+                iDiagMsg.WriteLine($"Connected to \"{destination}\"");
+                CompleteConnectionNoLock(match.Groups["cmd"].Value == "");
             }
             else
             {
-                iDiagMsg.WriteLine($"Unable to connect to \"{cmdStr}\": {cmdRsp.ResponseStr}");
+                iDiagMsg.WriteLine($"Unable to connect to \"{destination}\": {cmdRsp.ResponseStr}");
             }
 
             return cmdRsp;
