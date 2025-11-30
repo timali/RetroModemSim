@@ -66,13 +66,20 @@ namespace RetroModemSim
             /// </summary>
             /// <param name="cmdStr">The command received.</param>
             /// <returns>null if the command does not match, or a command response if it does.</returns>
+            /// <remarks>
+            /// If the command matches, the command string will be modified to remove the command taht was executed.
+            /// </remarks>
             /*************************************************************************************************************/
-            public CmdResponse ExecuteCommand(string cmdStr)
+            public CmdResponse ExecuteCommand(ref string cmdStr)
             {
                 Match match = CmdStrRegEx.Match(cmdStr);
                 if (match.Success)
                 {
-                    return CmdDelegate(cmdStr, match);
+                    // Remove the matching command from the command string (to support compound commands).
+                    cmdStr = cmdStr.Remove(0, match.Length);
+
+                    // Execute the command handler, passing only the matching part of the command string.
+                    return CmdDelegate(match.Value, match);
                 }
                 else
                 {
@@ -89,54 +96,50 @@ namespace RetroModemSim
         void InstallCoreCommands()
         {
             // Install our Hayes-compatible AT command handlers.
-            cmdList.Add(new CommandHandler("^A$",                                       CmdAnswer));
-            cmdList.Add(new CommandHandler("^T$",                                       CmdToneDialing));
-            cmdList.Add(new CommandHandler("^P$",                                       CmdPulseDialing));
-            cmdList.Add(new CommandHandler("^Z$",                                       CmdZap));
-            cmdList.Add(new CommandHandler("^O$",                                       CmdOnline));
-            cmdList.Add(new CommandHandler("^C[01]?$",                                  CmdCarrier));
-            cmdList.Add(new CommandHandler("^E[01]?$",                                  CmdEcho));
-            cmdList.Add(new CommandHandler("^F[01]?$",                                  CmdDuplex));
-            cmdList.Add(new CommandHandler("^H[01]?$",                                  CmdHangup));
-            cmdList.Add(new CommandHandler("^Q[01]?$",                                  CmdQuiet));
-            cmdList.Add(new CommandHandler("^V[01]?$",                                  CmdVerbal));
-            cmdList.Add(new CommandHandler("^M[012]?$",                                 CmdMonitor));
-            cmdList.Add(new CommandHandler("^X[012]?$",                                 CmdResultCodeSet));
-            cmdList.Add(new CommandHandler("^D.*$",                                     CmdDial));
-            cmdList.Add(new CommandHandler("^S(?<reg>\\d+)\\?$",                        CmdSRegQuery));
-            cmdList.Add(new CommandHandler("^S(?<reg>\\d+)=(?<val>\\d+)$",              CmdSRegSet));
+            cmdList.Add(new CommandHandler("^A",                                        CmdAnswer));
+            cmdList.Add(new CommandHandler("^T",                                        CmdToneDialing));
+            cmdList.Add(new CommandHandler("^P",                                        CmdPulseDialing));
+            cmdList.Add(new CommandHandler("^Z",                                        CmdZap));
+            cmdList.Add(new CommandHandler("^O",                                        CmdOnline));
+            cmdList.Add(new CommandHandler("^C[01]?",                                   CmdCarrier));
+            cmdList.Add(new CommandHandler("^E[01]?",                                   CmdEcho));
+            cmdList.Add(new CommandHandler("^F[01]?",                                   CmdDuplex));
+            cmdList.Add(new CommandHandler("^H[01]?",                                   CmdHangup));
+            cmdList.Add(new CommandHandler("^Q[01]?",                                   CmdQuiet));
+            cmdList.Add(new CommandHandler("^V[01]?",                                   CmdVerbal));
+            cmdList.Add(new CommandHandler("^M[012]?",                                  CmdMonitor));
+            cmdList.Add(new CommandHandler("^X[012]?",                                  CmdResultCodeSet));
+            cmdList.Add(new CommandHandler("^D.*",                                      CmdDial));
+            cmdList.Add(new CommandHandler("^S(?<reg>\\d+)\\?",                         CmdSRegQuery));
+            cmdList.Add(new CommandHandler("^S(?<reg>\\d+)=(?<val>\\d+)",               CmdSRegSet));
 
             // Install our extended AT command handlers.
-            cmdList.Add(new CommandHandler("^\\+IPR=(?<baud>\\d+)$",                    CmdSetBaud));
-            cmdList.Add(new CommandHandler("^\\+IPR\\?$",                               CmdBaudQuery));
+            cmdList.Add(new CommandHandler("^\\+IPR=(?<baud>\\d+)",                     CmdSetBaud));
+            cmdList.Add(new CommandHandler("^\\+IPR\\?",                                CmdBaudQuery));
 
             // Install our custom AT command handlers.
-            cmdList.Add(new CommandHandler("^\\$B[01]?$",                               CmdBufferOnline));
+            cmdList.Add(new CommandHandler("^\\$B[01]?",                                CmdBufferOnline));
 
             // Flow control commands.
-            cmdList.Add(new CommandHandler("^\\$SWFC[01]?$",                            CmdSoftwareFlowControl));
-            cmdList.Add(new CommandHandler("^\\$SWFC\\?$",                              CmdSoftwareFlowControlQuery));
+            cmdList.Add(new CommandHandler("^\\$SWFC[01]?",                             CmdSoftwareFlowControl));
+            cmdList.Add(new CommandHandler("^\\$SWFC\\?",                               CmdSoftwareFlowControlQuery));
 
             // DSR output configuration commands.
-            cmdList.Add(new CommandHandler("^\\$DSR=(?<inv>!?)(?<sig>(?:DTR|RTS|NONE))$", CmdDSRCfg));
-            cmdList.Add(new CommandHandler("^\\$DSR\\?$",                               CmdDSRCfgQuery));
+            cmdList.Add(new CommandHandler("^\\$DSR=(?<inv>!?)(?<sig>(?:DTR|RTS|NONE))", CmdDSRCfg));
+            cmdList.Add(new CommandHandler("^\\$DSR\\?",                                CmdDSRCfgQuery));
 
             // DCD output configuration commands.
-            cmdList.Add(new CommandHandler("^\\$DCD=(?<inv>!?)(?<sig>(?:DTR|RTS|NONE))$", CmdDCDCfg));
-            cmdList.Add(new CommandHandler("^\\$DCD\\?$",                               CmdDCDCfgQuery));
+            cmdList.Add(new CommandHandler("^\\$DCD=(?<inv>!?)(?<sig>(?:DTR|RTS|NONE))", CmdDCDCfg));
+            cmdList.Add(new CommandHandler("^\\$DCD\\?",                                CmdDCDCfgQuery));
 
             // RING output configuration commands.
-            cmdList.Add(new CommandHandler("^\\$RING=(?<inv>!?)(?<sig>(?:DTR|RTS|NONE))$", CmdRINGCfg));
-            cmdList.Add(new CommandHandler("^\\$RING\\?$",                              CmdRINGCfgQuery));
+            cmdList.Add(new CommandHandler("^\\$RING=(?<inv>!?)(?<sig>(?:DTR|RTS|NONE))", CmdRINGCfg));
+            cmdList.Add(new CommandHandler("^\\$RING\\?",                               CmdRINGCfgQuery));
 
             // Phonebook commands.
-            cmdList.Add(new CommandHandler("^\\$PB=(?<key>.+),(?<value>.+)$",           CmdPhoneBookAdd));
-            cmdList.Add(new CommandHandler("^\\$PB\\?$",                                CmdPhoneBookQuery));
-            cmdList.Add(new CommandHandler("^\\$PB=(?<key>.+)$",                        CmdPhoneBookDelete));
-
-            // Install the generic AT command handler last because it will match any command. Do this here instead of
-            // in the constructor to allow the user to install custom commands.
-            cmdList.Add(new CommandHandler("", CmdAt));
+            cmdList.Add(new CommandHandler("^\\$PB=(?<key>.+),(?<value>.+)",            CmdPhoneBookAdd));
+            cmdList.Add(new CommandHandler("^\\$PB\\?",                                 CmdPhoneBookQuery));
+            cmdList.Add(new CommandHandler("^\\$PB=(?<key>.+)",                         CmdPhoneBookDelete));
         }
 
         /*************************************************************************************************************/
@@ -321,25 +324,6 @@ namespace RetroModemSim
                 iDiagMsg.WriteLine("Echo On");
             }
             return CmdRsp.Ok;
-        }
-
-        /*************************************************************************************************************/
-        /// <summary>
-        /// Called when no other command handler matches, and it processes a simple "AT".
-        /// </summary>
-        /*************************************************************************************************************/
-        CmdResponse CmdAt(string cmdStr, Match match)
-        {
-            if (cmdStr == "")
-            {
-                // Handle AT
-                return CmdRsp.Ok;
-            }
-            else
-            {
-                // Anything else is an unrecognized command.
-                return CmdRsp.Error;
-            }
         }
 
         /*************************************************************************************************************/

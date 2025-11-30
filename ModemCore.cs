@@ -458,32 +458,63 @@ namespace RetroModemSim
 
         /*************************************************************************************************************/
         /// <summary>
+        /// Processes a single command.
+        /// </summary>
+        /// <param name="cmdStr">The command string.</param>
+        /// <returns>The response from executing the command, or Error if the command is not found.</returns>
+        /// <remarks>
+        /// This must be called while the state lock is already held.
+        /// </remarks>
+        /*************************************************************************************************************/
+        CmdResponse ExecuteSingleCmdNoLock(ref string cmdStr)
+        {
+            CmdResponse rsp;
+
+            // Search our list of commands for one matching the one received.
+            foreach (CommandHandler cmd in cmdList)
+            {
+                // Execute the command handler if it matches, and if so, return the result from executing it.
+                if ((rsp = cmd.ExecuteCommand(ref cmdStr)) != null)
+                {
+                    return rsp;
+                }
+            }
+
+            // There was no matching command handler for the given command.
+            return CmdRsp.Error;
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
         /// Executes the command current stored in cmdStrBuilder.
         /// </summary>
+        /// <remarks>
+        /// The command can be a compound command, containing multiple commands.
+        /// </remarks>
         /*************************************************************************************************************/
         void ExecuteCmd()
         {
             lock (stateLock)
             {
-                CmdResponse rsp = null;
+                CmdResponse rsp = CmdRsp.Ok;
 
                 try
                 {
-                    // Search our list of commands for one matching the one received.
-                    foreach (CommandHandler cmd in cmdList)
+                    // Get a trimmed string from our string builder.
+                    string cmdStr = cmdStrBuilder.ToString().Trim();
+
+                    // Process commands while the previous one was successfull and there are more commands to process.
+                    while ((rsp == CmdRsp.Ok) && !string.IsNullOrEmpty(cmdStr))
                     {
-                        if ((rsp = cmd.ExecuteCommand(cmdStrBuilder.ToString())) != null)
-                        {
-                            SendFinalResponseNoLock(rsp);
-                            break;
-                        }
+                        // Execute a single command (there could be more than one if it is a compound command).
+                        rsp = ExecuteSingleCmdNoLock(ref cmdStr);
+
+                        // Trim the command to remove any whitespace (for example, whitespace in compound commands).
+                        cmdStr = cmdStr.Trim();
                     }
 
-                    // No command handler for the given command, so alert the user.
-                    if (rsp == null)
-                    {
-                        SendFinalResponseNoLock(CmdRsp.Error);
-                    }
+                    // The command(s) has/have completed, so send the final response.
+                    SendFinalResponseNoLock(rsp);
                 }
                 catch (Exception ex)
                 {

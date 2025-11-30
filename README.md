@@ -16,6 +16,7 @@ RetroModemSim is written using .NET 6, so it can easily be run on Windows, Linux
  - Built-in phonebook, configurable via AT commands
  - Support for incoming connections, including auto-answer
  - Query and change the baud rate via AT command
+ - Support for compound commands (for example, `ATQ0V1E1S0=0`)
  - Software (XOn/XOff) support, configurable via AT command
  - Configurable RING, DCD, and DSR support via RTS/DTR
  - Accurate RING simulation, including auto-answer
