@@ -17,8 +17,9 @@ RetroModemSim is written using .NET 6, so it can easily be run on Windows, Linux
  - Support for incoming connections, including auto-answer
  - Query and change the baud rate via AT command
  - Software (XOn/XOff) support, configurable via AT command
+ - Configurable RING, DCD, and DSR support via RTS/DTR
  - Accurate RING simulation, including auto-answer
- - DCD simulation
+ - Accurate DCD simulation
  - Accurate support for a variety of S-registers
  - Can be used with the console instead of a COM port
  
@@ -155,6 +156,41 @@ Add a new phone book entry named `#1`, which dials `LOCALHOST:50000`:
 Delete the phone book entry named `#1`:
 > AT$PB=#1
 
+# DSR/DCD/RING Configuration
+By default, RetroModemSim will not output any physical signal in response to DSR/DCD/RING state changes, but you can configure RetroModemSim to use the DTR/RTS outputs to simulate the modem's DSR/DCD/RING signals. This is useful for application software which monitors these signals, for example, to determine when a call is connected (DCD), or when the line is ringing (RING).
+
+## Examples
+Suppose the cable you are using to connect the machine running RetroModemSim to your retro machine has DTR connected to DCD, and RTS connected to RING.
+
+In this case, you can configure the retro machine's DCD line to be controlled by the PC's DTR line:
+> AT$DCD=DTR
+
+And you can configure the retro machine's RING line to be controlled by the PC's RTS line:
+> AT$RING=RTS
+
+Now suppose your retro application requires the DSR signal, and your cable wires DTR to DSR. In that case, you can configure the retro machine's DSR line to be controlled by the PC's DTR line:
+> AT$DSR=DTR
+
+## Persistence
+DSR/DCD/RING configuration is persistent across power cycles, and are not affected by the zap (`ATZ`) command.
+
+## Querying Configuration
+You can query the current DSR/DCD/RING configuration:
+
+> AT$DCD?
+> 
+> AT$DSR?
+> 
+> AT$RING?
+
+## Inverted Outputs
+
+In some cases, your application may use/require inverted logic for the DSR/DCD/RING signals. In that case, use `!` when configuring the signal.
+
+For example, to configure the retro machine's DCD line to use inverted logic, and be controlled by the PC's DTR line:
+
+>AT$DCD=!DTR
+
 # Misc.
 
 ## Online Data Mode Buffering
@@ -166,6 +202,8 @@ Do not buffer data when connected while in command mode. Any data received when 
 > AT$B0
 
 ## Software Flow Control (XOn/XOff)
+Software flow control can be enabled between RetroModemSim and the retro computer. This can be useful in cases where the remote destination tries to send data to the retro PC faster than the retro PC can accept it. This is especially the case when using fast baud rates, especially on slow retro PCs.
+
 Enable software flow control:
 > AT$SWFC=1
 
@@ -208,7 +246,13 @@ These commands are recognized, but have no effect:
 > ATP
 
 ## Zap
-This command resets all settings to the default (this does not affect the phone book)
+This command resets most settings to the default. The following are unaffected:
+
+ - Baud rate
+ - Phone book contents
+ - Software flow control
+ - DSR, DCD, and RING configuration
+
 >ATZ
 
 ## Carrier
@@ -304,3 +348,28 @@ Then on the retro machine, we can simply connect to the PC:
 Once connected, we can use X-Modem to transfer files to/from the retro machine.
 
 Or, if your PC terminal program only supports creating TCP client connections, then you can initiate an incoming call to the RetroModemSim machine.
+
+# Wiring
+To use RetroModemSim, you will need a cable to connect the serial port on the machine that is running RetroModemSim (PC) to the serial port on the retro machine. At a minimum, you need the following connections:
+
+| PC Pin (DE-9) | PC Signal | Direction | Retro Machine Signal
+|---------------|-----------|-----------|---------------------
+| 2             | RXD       | <-        | TXD
+| 3             | TXD       | ->        | RXD
+| 5             | GND       | <->       | GND
+
+Now suppose you want to control your retro machine's RING signal with RTS, and its DCD signal with DTR. In that case, make the following connections (and set the appropriate configuration via AT commands):
+
+| PC Pin (DE-9) | PC Signal | Direction | Retro Machine Signal
+|---------------|-----------|-----------|---------------------
+| 4             | DTR       | ->        | DCD
+| 7             | RTS       | ->        | RING
+
+If necessary, you can connect lines that are driven by the retro machine into the PC's inputs:
+
+| PC Pin (DE-9) | PC Signal | Direction | Retro Machine Signal
+|---------------|-----------|-----------|---------------------
+| 1             | DCD       | <-        | DTR
+| 6             | DSR       | <-        | DTR
+| 8             | CTS       | <-        | RTS
+

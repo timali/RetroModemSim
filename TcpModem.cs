@@ -23,13 +23,13 @@ namespace RetroModemSim
         /// <summary>
         /// Constructor.
         /// </summary>
-        /// <param name="iDTE">The DTE instance to use.</param>
+        /// <param name="iDCE">The DCE instance to use.</param>
         /// <param name="iDiagMsg">The diagnostics message instance to use.</param>
         /// <param name="listenPort">
         /// The port to listen on for incoming connections, or 0 to disable incoming connectsions.
         /// </param>
         /*************************************************************************************************************/
-        public TcpModem(IDTE iDTE, IDiagMsg iDiagMsg, int listenPort) : base(iDTE, iDiagMsg)
+        public TcpModem(IDCE iDCE, IDiagMsg iDiagMsg, int listenPort) : base(iDCE, iDiagMsg)
         {
             try
             {

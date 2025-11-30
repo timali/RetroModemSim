@@ -1,6 +1,6 @@
-﻿using System.Text.RegularExpressions;
+﻿using System.Diagnostics;
 using System.Text;
-using System.Diagnostics;
+using System.Text.RegularExpressions;
 
 namespace RetroModemSim
 {
@@ -54,8 +54,8 @@ namespace RetroModemSim
             {
                 if (state == StateEnum.Online)
                 {
-                    // If we are in online data mode, deliver the byte to the DTE.
-                    iDTE.TxByte(rxData);
+                    // If we are in online data mode, deliver the byte.
+                    iDCE.TxByte(rxData);
                 }
                 else
                 {
@@ -182,7 +182,7 @@ namespace RetroModemSim
         Queue<byte> onlineDataBuffer = new Queue<byte>();
         PhoneBook phoneBook = new PhoneBook();
         StateEnum state;
-        IDTE iDTE;
+        IDCE iDCE;
         Stopwatch escapeSw = new Stopwatch();
         Timer EscapeSequenceTimer;
         Timer RingSequenceTimer;
@@ -205,7 +205,7 @@ namespace RetroModemSim
         // Protected members available to derived classes.
         protected IDiagMsg iDiagMsg;
         protected List<CommandHandler> cmdList = new List<CommandHandler>();
-        protected delegate CmdResponse CmdHandlerDelegate(string cmdStr, Match match);
+        public delegate CmdResponse CmdHandlerDelegate(string cmdStr, Match match);
         protected object stateLock = new object();
         protected bool connected;
 
@@ -226,12 +226,12 @@ namespace RetroModemSim
         /// <summary>
         /// Constructor.
         /// </summary>
-        /// <param name="iDTE">The DTE instance to use.</param>
+        /// <param name="iDCE">The DCE hardware abstraction instance to use.</param>
         /// <param name="iDiagMsg">The diagnostics message instance to use.</param>
         /*************************************************************************************************************/
-        public ModemCore(IDTE iDTE, IDiagMsg iDiagMsg)
+        public ModemCore(IDCE iDCE, IDiagMsg iDiagMsg)
         {
-            this.iDTE = iDTE;
+            this.iDCE = iDCE;
             this.iDiagMsg = iDiagMsg;
 
             EscapeSequenceTimer = new Timer(OnEscapeSequenceTimeout);
@@ -255,7 +255,7 @@ namespace RetroModemSim
             RingSequenceTimer.Change(Timeout.Infinite, Timeout.Infinite);
 
             // Ensure the RING signal is low.
-            iDTE.RING = false;
+            iDCE.RING = false;
 
             // Clear the ring count.
             sReg[(int)SRegEnum.RingCount] = 0;
@@ -274,8 +274,8 @@ namespace RetroModemSim
         {
             connected = true;
 
-            // Inform the DTE that we're now connected (the data carrier is detected).
-            iDTE.DCD = true;
+            // Use our DCE hardware interface to indicate that we're now connected (the data carrier is detected).
+            iDCE.DCD = true;
 
             // Move into online mode if requested.
             if (enterOnlineMode)
@@ -297,7 +297,7 @@ namespace RetroModemSim
             if (connected)
             {
                 iDiagMsg.WriteLine("Hanging Up");
-                iDTE.DCD = false;
+                iDCE.DCD = false;
                 HangUpModem();
                 connected = false;
                 onlineDataBuffer.Clear();
@@ -370,7 +370,7 @@ namespace RetroModemSim
 
         /*************************************************************************************************************/
         /// <summary>
-        /// Transmits a string to the DTE, translating to PETSCII if necessary.
+        /// Transmits a string to the DTE through the DCE interface, translating to PETSCII if necessary.
         /// </summary>
         /// <param name="str">The string to transmit.</param>
         /// <remarks>
@@ -381,7 +381,7 @@ namespace RetroModemSim
         {
             foreach(char c in str)
             {
-                iDTE.TxByte(TranslateToPetscii(c));
+                iDCE.TxByte(TranslateToPetscii(c));
             }
         }
 
@@ -395,8 +395,8 @@ namespace RetroModemSim
         /*************************************************************************************************************/
         void SendCrLfNoLock()
         {
-            iDTE.TxByte(sReg[(int)SRegEnum.CR]);
-            iDTE.TxByte(sReg[(int)SRegEnum.LF]);
+            iDCE.TxByte(sReg[(int)SRegEnum.CR]);
+            iDCE.TxByte(sReg[(int)SRegEnum.LF]);
         }
 
         /*************************************************************************************************************/
@@ -502,7 +502,7 @@ namespace RetroModemSim
                     {
                         while (onlineDataBuffer.Count > 0)
                         {
-                            iDTE.TxByte(onlineDataBuffer.Dequeue());
+                            iDCE.TxByte(onlineDataBuffer.Dequeue());
                         }
                     }
                 }
@@ -529,7 +529,7 @@ namespace RetroModemSim
 
                 if (echo)
                 {
-                    iDTE.TxByte(TranslateToPetscii(inChar));
+                    iDCE.TxByte(TranslateToPetscii(inChar));
                 }
 
                 // Capitalize everything so we can also work with lowercase AT commands.
@@ -609,7 +609,7 @@ namespace RetroModemSim
                 }
 
                 ringState = !ringState;
-                iDTE.RING = ringState;
+                iDCE.RING = ringState;
 
                 if (ringState)
                 {
@@ -696,7 +696,7 @@ namespace RetroModemSim
                 // Echo the data back to the DTE in half-duplex mode.
                 if (halfDuplex)
                 {
-                    iDTE.TxByte(sReg[(int)SRegEnum.EscapeCode]);
+                    iDCE.TxByte(sReg[(int)SRegEnum.EscapeCode]);
                 }
 
                 escapeCharCount--;
@@ -754,7 +754,7 @@ namespace RetroModemSim
                     // Echo the data back to the DTE in half-duplex mode.
                     if (halfDuplex)
                     {
-                        iDTE.TxByte(dataFromDte);
+                        iDCE.TxByte(dataFromDte);
                     }
                 }
 
@@ -776,14 +776,22 @@ namespace RetroModemSim
             // Initialize this here so that the user can override it after instantiation.
             sReg[(int)SRegEnum.RingsBeforeAnswering] = RingsBeforeAnswering;
 
-            // Initialize the state of the GPIOs.
-            iDTE.DCD = false;
-            iDTE.RING = false;
+            // Indicate that the data set (modem) is ready.
+            iDCE.DSR = true;
+
+            // No carrier is detected (we are not connected).
+            iDCE.DCD = false;
+
+            // There is no incoming call.
+            iDCE.RING = false;
+
+            // Apply the initial software flow control settings.
+            iDCE.SoftwareFlowControl = iDCE.SoftwareFlowControl;
 
             // Process data until the ZAP command is executed, which resets everything to the default.
             while (!zap)
             {
-                int dataFromDte = iDTE.RxByte();
+                int dataFromDte = iDCE.RxByte();
 
                 if (state == StateEnum.Online)
                 {

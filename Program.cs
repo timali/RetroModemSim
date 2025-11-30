@@ -6,6 +6,13 @@
         static int baud = 2400;
         static int incomingPort = 60000;
 
+        /*************************************************************************************************************/
+        /// <summary>
+        /// Parses the arguments for the application.
+        /// </summary>
+        /// <param name="args">The application arguments.</param>
+        /// <returns>True if the application should immediately terminate (based on the arguments).</returns>
+        /*************************************************************************************************************/
         static bool ParseArgs(string[] args)
         {
             foreach (string arg in args)
@@ -39,6 +46,12 @@
             return false;
         }
 
+        /*************************************************************************************************************/
+        /// <summary>
+        /// The main application entry point.
+        /// </summary>
+        /// <param name="args">The command line arguments.</param>
+        /*************************************************************************************************************/
         static void Main(string[] args)
         {
             Console.WriteLine("Retro Modem Simulator v1.0, Alicie, 2023.");
@@ -56,14 +69,17 @@
                 return;
             }
 
-            IDTE iDTE;
+            // Initialize the AppSettings subsystem, which allows us to save/restore our settings.
+            AppSettings.Initialize(".");
+
+            IDCE iDCE;
             IDiagMsg iDiagMsg;
 
             if (comPort == null)
             {
-                // Use the console for the DTE, and do not display diagnostic messages.
-                iDTE = new ConsoleDTE();
+                // Use the console for the DCE hardware interface, and do not display diagnostic messages.
                 iDiagMsg = new NullDiagMsg();
+                iDCE = new ConsoleDCE(iDiagMsg);
             }
             else
             {
@@ -71,8 +87,8 @@
                 {
                     // Use a UART to talk to the DTE, and output diagnostic messages on the console.
                     Console.WriteLine($"Opening COM port {comPort} at {baud} baud.");
-                    iDTE = new UartDTE(comPort, baud);
                     iDiagMsg = new ConsoleDiagMsg();
+                    iDCE = new UartDCE(iDiagMsg, comPort, baud);
                 }
                 catch (Exception ex)
                 {
@@ -84,7 +100,7 @@
             Console.WriteLine($"Beginning modem simulation with incoming TCP port {incomingPort}.");
             while (true)
             {
-                TcpModem modem = new TcpModem(iDTE, iDiagMsg, incomingPort);
+                TcpModem modem = new TcpModem(iDCE, iDiagMsg, incomingPort);
                 modem.RunSimulation();
             }
         }

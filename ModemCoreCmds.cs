@@ -12,6 +12,20 @@ namespace RetroModemSim
     {
         /*************************************************************************************************************/
         /// <summary>
+        /// Parses a DCE output configuration AT command.
+        /// </summary>
+        /*************************************************************************************************************/
+        IDCE.DCEOutputCfg ParseOutputCfg(string cmdStr, Match match)
+        {
+            return new IDCE.DCEOutputCfg()
+            {
+                Invert = !string.IsNullOrEmpty(match.Groups["inv"].Value),
+                Output = IDCE.DTEOutputs.Parse<IDCE.DTEOutputs>(match.Groups["sig"].Value),
+            };
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
         /// Encapsulates a response to an AT command.
         /// </summary>
         /*************************************************************************************************************/
@@ -75,34 +89,50 @@ namespace RetroModemSim
         void InstallCoreCommands()
         {
             // Install our Hayes-compatible AT command handlers.
-            cmdList.Add(new CommandHandler("^A$",                                   CmdAnswer));
-            cmdList.Add(new CommandHandler("^T$",                                   CmdToneDialing));
-            cmdList.Add(new CommandHandler("^P$",                                   CmdPulseDialing));
-            cmdList.Add(new CommandHandler("^Z$",                                   CmdZap));
-            cmdList.Add(new CommandHandler("^O$",                                   CmdOnline));
-            cmdList.Add(new CommandHandler("^C[01]?$",                              CmdCarrier));
-            cmdList.Add(new CommandHandler("^E[01]?$",                              CmdEcho));
-            cmdList.Add(new CommandHandler("^F[01]?$",                              CmdDuplex));
-            cmdList.Add(new CommandHandler("^H[01]?$",                              CmdHangup));
-            cmdList.Add(new CommandHandler("^Q[01]?$",                              CmdQuiet));
-            cmdList.Add(new CommandHandler("^V[01]?$",                              CmdVerbal));
-            cmdList.Add(new CommandHandler("^M[012]?$",                             CmdMonitor));
-            cmdList.Add(new CommandHandler("^X[012]?$",                             CmdResultCodeSet));
-            cmdList.Add(new CommandHandler("^D.*$",                                 CmdDial));
-            cmdList.Add(new CommandHandler("^S(?<reg>\\d+)\\?$",                    CmdSRegQuery));
-            cmdList.Add(new CommandHandler("^S(?<reg>\\d+)=(?<val>\\d+)$",          CmdSRegSet));
+            cmdList.Add(new CommandHandler("^A$",                                       CmdAnswer));
+            cmdList.Add(new CommandHandler("^T$",                                       CmdToneDialing));
+            cmdList.Add(new CommandHandler("^P$",                                       CmdPulseDialing));
+            cmdList.Add(new CommandHandler("^Z$",                                       CmdZap));
+            cmdList.Add(new CommandHandler("^O$",                                       CmdOnline));
+            cmdList.Add(new CommandHandler("^C[01]?$",                                  CmdCarrier));
+            cmdList.Add(new CommandHandler("^E[01]?$",                                  CmdEcho));
+            cmdList.Add(new CommandHandler("^F[01]?$",                                  CmdDuplex));
+            cmdList.Add(new CommandHandler("^H[01]?$",                                  CmdHangup));
+            cmdList.Add(new CommandHandler("^Q[01]?$",                                  CmdQuiet));
+            cmdList.Add(new CommandHandler("^V[01]?$",                                  CmdVerbal));
+            cmdList.Add(new CommandHandler("^M[012]?$",                                 CmdMonitor));
+            cmdList.Add(new CommandHandler("^X[012]?$",                                 CmdResultCodeSet));
+            cmdList.Add(new CommandHandler("^D.*$",                                     CmdDial));
+            cmdList.Add(new CommandHandler("^S(?<reg>\\d+)\\?$",                        CmdSRegQuery));
+            cmdList.Add(new CommandHandler("^S(?<reg>\\d+)=(?<val>\\d+)$",              CmdSRegSet));
 
             // Install our extended AT command handlers.
-            cmdList.Add(new CommandHandler("^\\+IPR=(?<baud>\\d+)$",                CmdSetBaud));
-            cmdList.Add(new CommandHandler("^\\+IPR\\?$",                           CmdBaudQuery));
+            cmdList.Add(new CommandHandler("^\\+IPR=(?<baud>\\d+)$",                    CmdSetBaud));
+            cmdList.Add(new CommandHandler("^\\+IPR\\?$",                               CmdBaudQuery));
 
-            // Install our custom AT command handlers
-            cmdList.Add(new CommandHandler("^\\$B[01]?$",                           CmdBufferOnline));
-            cmdList.Add(new CommandHandler("^\\$SWFC[01]?$",                        CmdSoftwareFlowControl));
-            cmdList.Add(new CommandHandler("^\\$SWFC\\?$",                          CmdSoftwareFlowControlQuery));
-            cmdList.Add(new CommandHandler("^\\$PB=(?<key>.+),(?<value>.+)$",       CmdPhoneBookAdd));
-            cmdList.Add(new CommandHandler("^\\$PB\\?$",                            CmdPhoneBookQuery));
-            cmdList.Add(new CommandHandler("^\\$PB=(?<key>.+)$",                    CmdPhoneBookDelete));
+            // Install our custom AT command handlers.
+            cmdList.Add(new CommandHandler("^\\$B[01]?$",                               CmdBufferOnline));
+
+            // Flow control commands.
+            cmdList.Add(new CommandHandler("^\\$SWFC[01]?$",                            CmdSoftwareFlowControl));
+            cmdList.Add(new CommandHandler("^\\$SWFC\\?$",                              CmdSoftwareFlowControlQuery));
+
+            // DSR output configuration commands.
+            cmdList.Add(new CommandHandler("^\\$DSR=(?<inv>!?)(?<sig>(?:DTR|RTS|))$",   CmdDSRCfg));
+            cmdList.Add(new CommandHandler("^\\$DSR\\?$",                               CmdDSRCfgQuery));
+
+            // DCD output configuration commands.
+            cmdList.Add(new CommandHandler("^\\$DCD=(?<inv>!?)(?<sig>(?:DTR|RTS|))$",   CmdDCDCfg));
+            cmdList.Add(new CommandHandler("^\\$DCD\\?$",                               CmdDCDCfgQuery));
+
+            // RING output configuration commands.
+            cmdList.Add(new CommandHandler("^\\$RING=(?<inv>!?)(?<sig>(?:DTR|RTS|))$",  CmdRINGCfg));
+            cmdList.Add(new CommandHandler("^\\$RING\\?$",                              CmdRINGCfgQuery));
+
+            // Phonebook commands.
+            cmdList.Add(new CommandHandler("^\\$PB=(?<key>.+),(?<value>.+)$",           CmdPhoneBookAdd));
+            cmdList.Add(new CommandHandler("^\\$PB\\?$",                                CmdPhoneBookQuery));
+            cmdList.Add(new CommandHandler("^\\$PB=(?<key>.+)$",                        CmdPhoneBookDelete));
 
             // Install the generic AT command handler last because it will match any command. Do this here instead of
             // in the constructor to allow the user to install custom commands.
@@ -505,24 +535,24 @@ namespace RetroModemSim
         CmdResponse CmdSetBaud(string cmdStr, Match match)
         {
             int baud = int.Parse(match.Groups["baud"].Value);
-            int currentBaud = iDTE.Baud;
+            int currentBaud = iDCE.Baud;
 
             try
             {
                 iDiagMsg.WriteLine($"Setting baud rate to {baud}.");
 
                 // Try to set the new baud rate to see if the baud rate is supported or not.
-                iDTE.Baud = baud;
+                iDCE.Baud = baud;
 
                 // Now switch back to the original baud rate and send the OK response at the original rate.
-                iDTE.Baud = currentBaud;
+                iDCE.Baud = currentBaud;
                 SendFinalResponseNoLock(CmdRsp.Ok);
 
                 // Wait for a while for the response to be sent in full at the original baud rate.
                 Thread.Sleep(BaudChangeDelay);
 
                 // Finally, switch to the new baud rate.
-                iDTE.Baud = baud;
+                iDCE.Baud = baud;
 
                 // Return a special response that indicates that the modem core will not send any response.
                 return CmdRsp.None;
@@ -530,7 +560,7 @@ namespace RetroModemSim
             catch(Exception ex)
             {
                 // Restore the baud rate to the original value.
-                iDTE.Baud = currentBaud;
+                iDCE.Baud = currentBaud;
 
                 // Indicate that the given baud rate cannot be set.
                 iDiagMsg.WriteLine($"Failed to set baud rate to {baud}: {ex.Message}");
@@ -545,7 +575,7 @@ namespace RetroModemSim
         /*************************************************************************************************************/
         CmdResponse CmdBaudQuery(string cmdStr, Match match)
         {
-            SendIntermediateResponseNoLock($"+IPR: {iDTE.Baud}");
+            SendIntermediateResponseNoLock($"+IPR: {iDCE.Baud}");
             return CmdRsp.Ok;
         }
 
@@ -648,12 +678,12 @@ namespace RetroModemSim
         {
             if ((cmdStr.Length > 5) && (cmdStr[5] == '1'))
             {
-                iDTE.SoftwareFlowControl = true;
+                iDCE.SoftwareFlowControl = true;
                 iDiagMsg.WriteLine("XON/XOFF Flow Control Enabled");
             }
             else
             {
-                iDTE.SoftwareFlowControl = false;
+                iDCE.SoftwareFlowControl = false;
                 iDiagMsg.WriteLine("XON/XOFF Flow Control Disabled");
             }
 
@@ -667,7 +697,79 @@ namespace RetroModemSim
         /*************************************************************************************************************/
         CmdResponse CmdSoftwareFlowControlQuery(string cmdStr, Match match)
         {
-            SendIntermediateResponseNoLock($"$SWFC: {(iDTE.SoftwareFlowControl ? "1" : "0")}");
+            SendIntermediateResponseNoLock($"$SWFC: {(iDCE.SoftwareFlowControl ? "1" : "0")}");
+            return CmdRsp.Ok;
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
+        /// AT$DSR, Configuration of the DSR output.
+        /// </summary>
+        /*************************************************************************************************************/
+        CmdResponse CmdDSRCfg(string cmdStr, Match match)
+        {
+            iDiagMsg.WriteLine($"DSR={iDCE.DSRCfg}");
+            iDCE.DSRCfg = ParseOutputCfg(cmdStr, match);
+
+            return CmdRsp.Ok;
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
+        /// AT$DSR?, Query the configuration of the DSR output.
+        /// </summary>
+        /*************************************************************************************************************/
+        CmdResponse CmdDSRCfgQuery(string cmdStr, Match match)
+        {
+            SendIntermediateResponseNoLock($"$DSR: {iDCE.DSRCfg}");
+            return CmdRsp.Ok;
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
+        /// AT$DCD, Configuration of the DCD output.
+        /// </summary>
+        /*************************************************************************************************************/
+        CmdResponse CmdDCDCfg(string cmdStr, Match match)
+        {
+            iDiagMsg.WriteLine($"DCD={iDCE.DCDCfg}");
+            iDCE.DCDCfg = ParseOutputCfg(cmdStr, match);
+
+            return CmdRsp.Ok;
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
+        /// AT$DCD?, Query the configuration of the DCD output.
+        /// </summary>
+        /*************************************************************************************************************/
+        CmdResponse CmdDCDCfgQuery(string cmdStr, Match match)
+        {
+            SendIntermediateResponseNoLock($"$DCD: {iDCE.DCDCfg}");
+            return CmdRsp.Ok;
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
+        /// AT$RING, Configuration of the RING output.
+        /// </summary>
+        /*************************************************************************************************************/
+        CmdResponse CmdRINGCfg(string cmdStr, Match match)
+        {
+            iDiagMsg.WriteLine($"RING={iDCE.RINGCfg}");
+            iDCE.RINGCfg = ParseOutputCfg(cmdStr, match);
+
+            return CmdRsp.Ok;
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
+        /// AT$RING?, Query the configuration of the RING output.
+        /// </summary>
+        /*************************************************************************************************************/
+        CmdResponse CmdRINGCfgQuery(string cmdStr, Match match)
+        {
+            SendIntermediateResponseNoLock($"$RING: {iDCE.RINGCfg}");
             return CmdRsp.Ok;
         }
     }
