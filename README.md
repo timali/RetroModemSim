@@ -37,7 +37,7 @@ This is because when some C64/C128 terminal applications are in graphics mode, t
 
     RetroModemSim comport=<COM_port> baud=<baud_rate> incomingport=<TCP_port>
     
-    Baud rate defaults to 2400 if unspecified.
+    Baud rate defaults to 1200 if unspecified.
     
     Incomingport defaults to 60000 if unspecified. If incomingport is 0, incoming calls are disabled.
     
@@ -47,7 +47,7 @@ This is because when some C64/C128 terminal applications are in graphics mode, t
 Start on a Linux system using the first USB RS-232 adapter at 19200 baud, accepting incoming connections on port `60000`:
 > RetroModemSim comport=/dev/ttyUSB0 baud=19200
 
-Start on a Windows system using `COM4` at the default baud rate of `2400`, disabling incoming connections:
+Start on a Windows system using `COM4` at the default baud rate of `1200`, disabling incoming connections:
 > RetroModemSim comport=COM4 incomingport=0
 
 # Dialing and Call Management
@@ -133,7 +133,7 @@ You can disable automatic answering by setting `S0` to `0`:
 > ATS0=0
 
 # Baud Rate
-The default baud rate is set according to the command-line parameter `baud`. If not specified, it defaults to `2400`.
+The default baud rate is set according to the command-line parameter `baud`. If not specified, it defaults to `1200`.
 
 You can query the current baud rate:
 > AT+IPR?

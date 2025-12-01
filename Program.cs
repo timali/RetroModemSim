@@ -3,7 +3,7 @@
     internal class Program
     {
         static string comPort;
-        static int baud = 2400;
+        static int baud = 1200;
         static int incomingPort = 60000;
 
         /*************************************************************************************************************/
@@ -34,7 +34,7 @@
                     Console.WriteLine();
                     Console.WriteLine("Usage: RetroModemSim comport=<COM_port> baud=<baud_rate> incomingport=<TCP_port>");
                     Console.WriteLine();
-                    Console.WriteLine("Baud rate defaults to 2400 if unspecified.");
+                    Console.WriteLine("Baud rate defaults to 1200 if unspecified.");
                     Console.WriteLine();
                     Console.WriteLine("Incomingport defaults to 60000 if unspecified. If incomingport is 0, incoming calls are disabled.");
                     Console.WriteLine();
