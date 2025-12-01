@@ -319,16 +319,18 @@ Speaker off:
 Speaker on (always):
 > ATM2
 
-## Result Code Set
-Display all result codes:
-> ATX
-> ATX2
+## Result Code Levels
 
-Only display result codes 0-4:
-> ATX0
+| CMD  | Report Connection Speed | Detect Dial Tone | Detect Busy Signal
+|------|-------------------------|------------------|-------------------
+| ATX0 | No                      | No               | No
+| ATX1 | Yes                     | No               | No
+| ATX2 | Yes                     | Yes              | No
+| ATX3 | Yes                     | No               | Yes
+| ATX  | Yes                     | Yes              | Yes
+| ATX4 | Yes                     | Yes              | Yes
 
-Only display result codes 0-5:
-> ATX1
+Note that dial tone and busy signal detection have no real effect on the modem simulation.
 
 ## Repeat the Last AT command:
 

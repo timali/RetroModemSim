@@ -108,7 +108,7 @@ namespace RetroModemSim
             cmdList.Add(new CommandHandler("^Q[01]?",                                   CmdQuiet));
             cmdList.Add(new CommandHandler("^V[01]?",                                   CmdVerbal));
             cmdList.Add(new CommandHandler("^M[012]?",                                  CmdMonitor));
-            cmdList.Add(new CommandHandler("^X[012]?",                                  CmdResultCodeSet));
+            cmdList.Add(new CommandHandler("^X[01234]?",                                CmdResultCodeSet));
             cmdList.Add(new CommandHandler("^D(?<tp>[TP]?)@?(?<dst>.*?)(?<cmd>;?)$",    CmdDial));
             cmdList.Add(new CommandHandler("^S(?<reg>\\d+)\\?",                         CmdSRegQuery));
             cmdList.Add(new CommandHandler("^S(?<reg>\\d+)=(?<val>\\d+)",               CmdSRegSet));
@@ -149,7 +149,7 @@ namespace RetroModemSim
         /*************************************************************************************************************/
         CmdResponse CmdResultCodeSet(string cmdStr, Match match)
         {
-            char s = '2';
+            char s = '4';
 
             if (cmdStr.Length > 1)
             {
@@ -159,21 +159,37 @@ namespace RetroModemSim
             switch (s)
             {
                 case '0':
-                    iDiagMsg.WriteLine("Displaying Result Codes 0-4");
-                    resultCodeLimit = 4;
+                    reportConnectionSpeed = false;
+                    detectDialTone        = false;
+                    detectBusySignal      = false;
                     break;
 
                 case '1':
-                    iDiagMsg.WriteLine("Displaying Result Codes 0-5");
-                    resultCodeLimit = 5;
+                    reportConnectionSpeed = true;
+                    detectDialTone        = false;
+                    detectBusySignal      = false;
                     break;
 
                 case '2':
-                    iDiagMsg.WriteLine("Displaying All Result Codes");
-                    resultCodeLimit = RESULT_CODE_ALL;
+                    reportConnectionSpeed = true;
+                    detectDialTone        = true;
+                    detectBusySignal      = false;
+                    break;
+
+                case '3':
+                    reportConnectionSpeed = true;
+                    detectDialTone        = false;
+                    detectBusySignal      = true;
+                    break;
+
+                case '4':
+                    reportConnectionSpeed = true;
+                    detectDialTone        = true;
+                    detectBusySignal      = true;
                     break;
             }
 
+            iDiagMsg.WriteLine($"Report connection speed: {reportConnectionSpeed}, detect dial tone: {detectDialTone}, detect busy signal: {detectBusySignal}");
             return CmdRsp.Ok;
         }
 

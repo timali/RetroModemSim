@@ -174,11 +174,11 @@ namespace RetroModemSim
         }
 
         const int PETSCII_START = 0xC1, PETSCII_END = 0xDA, PETSCII_SHIFT = 0x80, PETSCII_BS = 0x14, ASCII_BS = 0x08;
-        const int RESULT_CODE_ALL = int.MaxValue - 1;
         bool petscii, zap, halfDuplex, hideResponses, numericResponses, intrmRspSent, ringState, ringing;
         bool bufferOnline = true, echo = true;
+        bool reportConnectionSpeed = true, detectDialTone = true, detectBusySignal = true;
         StringBuilder cmdStrBuilder;
-        int escapeCharCount, resultCodeLimit = RESULT_CODE_ALL;
+        int escapeCharCount;
         Queue<byte> onlineDataBuffer = new Queue<byte>();
         PhoneBook phoneBook = new PhoneBook();
         StateEnum state;
@@ -238,6 +238,39 @@ namespace RetroModemSim
             RingSequenceTimer = new Timer(OnRingSequenceTimeout);
 
             InstallCoreCommands();
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
+        /// Returns a CONNECT command response based on the DCE speed and whether connection speed is being reported.
+        /// </summary>
+        /// <param name="rsp">The command to translate.</param>
+        /*************************************************************************************************************/
+        CmdResponse TrasnslateRspForConnect(CmdResponse rsp)
+        {
+            // We only translate connection responses, and only if we're reporting connection speeds.
+            if ((rsp != CmdRsp.Connect) || (!reportConnectionSpeed))
+            {
+                return rsp;
+            }
+
+            // For compatibility, if the DCE baud rate is >=33600, simply report 33600 (that's the highest we support).
+            if (iDCE.Baud >= 33600)
+            {
+                return new CmdResponse(60, "CONNECT 33600");
+            }
+
+            // Otherwise, if the DCE baud is a common one, report it.
+            return iDCE.Baud switch
+            {
+                1200  => new CmdResponse(5,  "CONNECT 1200"),
+                2400  => new CmdResponse(10, "CONNECT 2400"),
+                4800  => new CmdResponse(11, "CONNECT 4800"),
+                9600  => new CmdResponse(12, "CONNECT 9600"),
+                14400 => new CmdResponse(13, "CONNECT 14400"),
+                19200 => new CmdResponse(14, "CONNECT 19200"),
+                _     => CmdRsp.Connect,
+            };
         }
 
         /*************************************************************************************************************/
@@ -427,14 +460,17 @@ namespace RetroModemSim
         /*************************************************************************************************************/
         void SendFinalResponseNoLock(CmdResponse rsp)
         {
-            // Inhibit responses if the responses are hidden, or are filtered out.
-            if ((!hideResponses) && (rsp.Code <= resultCodeLimit))
+            // Inhibit responses if the responses are hidden.
+            if (!hideResponses)
             {
                 // Inhibit all responses other than CONNECT while in online data mode.
                 if ((state == StateEnum.Online) && (rsp != CmdRsp.Connect))
                 {
                     return;
                 }
+
+                // Translate the response for special CONNECT responses.
+                rsp = TrasnslateRspForConnect(rsp);
 
                 // If any intermediate responses were sent, send an extra CR+LF.
                 if (intrmRspSent)
