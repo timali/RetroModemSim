@@ -1,10 +1,25 @@
-﻿namespace RetroModemSim
+﻿using System.Reflection;
+
+namespace RetroModemSim
 {
     internal class Program
     {
         static string comPort;
         static int baud = 1200;
         static int incomingPort = 60000;
+
+        /*************************************************************************************************************/
+        /// <summary>
+        /// Returns a description of the application, along with version information.
+        /// </summary>
+        /*************************************************************************************************************/
+        public static string AppDescription
+        {
+            get
+            {
+                return $"RetroModemSim v{Assembly.GetEntryAssembly().GetName().Version}, .NET {Environment.Version}";
+            }
+        }
 
         /*************************************************************************************************************/
         /// <summary>
@@ -54,7 +69,7 @@
         /*************************************************************************************************************/
         static void Main(string[] args)
         {
-            Console.WriteLine("Retro Modem Simulator v1.0, Alicie, 2023.");
+            Console.WriteLine($"{AppDescription}, Alicie, 2023-2025.");
 
             try
             {

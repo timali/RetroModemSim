@@ -306,6 +306,9 @@ Enable verbal mode (use text responses):
 Disable verbal mode (use numerical responses):
 > ATV0
 
+## Query Modem Information
+> ATI
+
 ## Monitor
 This command is recognized, but has no effect:
 

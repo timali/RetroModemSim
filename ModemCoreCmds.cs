@@ -97,6 +97,7 @@ namespace RetroModemSim
         {
             // Install our Hayes-compatible AT command handlers.
             cmdList.Add(new CommandHandler("^A",                                        CmdAnswer));
+            cmdList.Add(new CommandHandler("^I[0-9]?",                                  CmdInfo));
             cmdList.Add(new CommandHandler("^T",                                        CmdToneDialing));
             cmdList.Add(new CommandHandler("^P",                                        CmdPulseDialing));
             cmdList.Add(new CommandHandler("^Z",                                        CmdZap));
@@ -407,6 +408,17 @@ namespace RetroModemSim
             TerminateRingNoLock();
 
             return CmdRsp.Connect;
+        }
+
+        /*************************************************************************************************************/
+        /// <summary>
+        /// ATI, query modem information.
+        /// </summary>
+        /*************************************************************************************************************/
+        CmdResponse CmdInfo(string cmdStr, Match match)
+        {
+            SendIntermediateResponseNoLock($"{Program.AppDescription}");
+            return CmdRsp.Ok;
         }
 
         /*************************************************************************************************************/
